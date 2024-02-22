@@ -3,7 +3,7 @@ import os
 import time
 
 from flask import current_app as app, Blueprint, jsonify, render_template, abort, send_file, session, request
-from flask.helpers import safe_join
+from werkzeug.utils import safe_join
 from app import utils
 import misc_utils
 import json
