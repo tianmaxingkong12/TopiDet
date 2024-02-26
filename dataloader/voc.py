@@ -76,7 +76,7 @@ class VOCTrainValDataset(dataset.Dataset):
         difficult_bbox = 0
 
         """
-        如果有缓存的pickle文件，就直接从pickle文件读取bboxes
+        如果有缓存的pickle文件, 就直接从pickle文件读取bboxes
         """
         os.makedirs('.cache', exist_ok=True)
 
