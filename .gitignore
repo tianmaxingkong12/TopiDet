@@ -3,7 +3,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
 # C extensions
 *.so
 
@@ -144,3 +143,6 @@ submit*
 submission*
 .idea/
 pretrained/
+wandb/*
+.ctfd_secret_key
+.vscode/*
