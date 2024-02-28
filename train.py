@@ -113,9 +113,9 @@ with torch.no_grad():
         # wandb可视化训练
         if opt.start_wandb and "WANDB" in config:
             wandb.init(
-                project = config.LOG.PROJECT_NAME,
-                group= config.LOG.GROUP_NAME,
-                job_type= config.LOG.TOB_TYPE,
+                project = config.WANDB.PROJECT_NAME,
+                group= config.WANDB.GROUP_NAME,
+                job_type= config.WANDB.JOB_TYPE,
                 name = opt.tag,
                 config= config
             )
