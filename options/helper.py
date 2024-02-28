@@ -6,13 +6,9 @@ from utils import get_command_run
 from .options import opt, config
 
 
-def init_log(training=True):
-    if training:
-        log_dir = os.path.join('logs', opt.tag)
-    else:
-        log_dir = os.path.join('results', opt.tag)
-
-    utils.try_make_dir(log_dir)
+def init_log(log_dir):
+    if os.path.exists(log_dir) ==  False:
+        utils.try_make_dir(log_dir)
     logger = utils.get_logger(f=os.path.join(log_dir, 'log.txt'), mode='a', level='info')
     logger.info('==================Configs==================')
     with open(opt.config) as f:
@@ -37,8 +33,8 @@ def get_gpu_id():
 
     return gpu_id
 
-def load_meta(new=False):
-    path = os.path.join('logs', opt.tag, 'meta.json')
+def load_meta(log_dir, new=False):
+    path = os.path.join(log_dir, 'meta.json')
     if os.path.isfile(path):
         with open(path, 'r') as f:
             meta = json.load(f)
@@ -57,8 +53,8 @@ def load_meta(new=False):
         meta.append(new_meta)
     return meta
 
-def save_meta(meta):
-    path = os.path.join('logs', opt.tag, 'meta.json')
+def save_meta(log_dir, meta):
+    path = os.path.join(log_dir, 'meta.json')
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(meta, f, ensure_ascii=False)
 

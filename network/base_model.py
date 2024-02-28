@@ -71,6 +71,8 @@ class BaseModel(torch.nn.Module):
         gt_bboxes = []
         gt_labels = []
         gt_difficults = []
+        metrics = dict()
+
         
         with torch.no_grad():
             for i, sample in enumerate(dataloader):
@@ -125,6 +127,12 @@ class BaseModel(torch.nn.Module):
 
             logger.info(
                 f'Eva({data_name}) epoch {epoch}, mean of (AP50-AP95): {sum(result)/len(result)}')
+            
+            ## 构建返回的指标信息及损失
+            metrics[data_name+"/"+"AP50"] = result[0]
+            metrics[data_name+"/"+"AP75"] = result[5]
+            metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result) 
+            return metrics
 
 
     def load(self, ckpt_path):
@@ -155,9 +163,9 @@ class BaseModel(torch.nn.Module):
 
         return epoch
 
-    def save(self, which_epoch, published=False):
+    def save(self, save_dir, which_epoch, published=False):
         save_filename = f'{which_epoch}_{self.config.MODEL.NAME}.pt'
-        save_path = os.path.join(self.save_dir, save_filename)
+        save_path = os.path.join(save_dir, save_filename)
         save_dict = {
             'detector': self.detector,
             'epoch': which_epoch

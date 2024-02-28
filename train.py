@@ -3,6 +3,7 @@ import os
 import pdb
 import time
 import numpy as np
+import datetime
 
 import torch
 import torch.distributed as dist
@@ -11,6 +12,7 @@ from torch.autograd import Variable
 
 from options.helper import is_distributed, is_first_gpu, setup_multi_processes
 from options import opt, config
+import wandb
 
 # 设置多卡训练
 if is_distributed():
@@ -41,24 +43,39 @@ with torch.no_grad():
     if 'RANDOM_SEED' in config.MISC:
         seed_everything(config.MISC.RANDOM_SEED)
     
-    # 初始化路径
-    save_root = os.path.join('checkpoints', opt.tag)
-    log_root = os.path.join('logs', opt.tag)
-
-    utils.try_make_dir(save_root)
-    utils.try_make_dir(log_root)
 
     # dataloader
     train_dataloader = train_dataloader
     val_dataloader = val_dataloader
 
     if is_first_gpu():
+        # 初始化日志系统
+        # 日志系统包括config、log.txt、checkpoint文件夹、runs:tensorboard保存路径
+        # 日志系统文件夹层次
+        # -logs
+        # -EXP_NAME
+        #   |-EXP_ID
+        #       |--config.py
+        #       |--log.txt
+        #       |--checkpoints
+        #       |--runs
+        EXP_ID = datetime.datetime.strftime(datetime.datetime.now(),"%Y%m%d-%H%M%S")
+        config.WANDB.EXP_ID = EXP_ID
+        config.WANDB.EXP_NAME = opt.tag
+        # 初始化路径
+        log_root = os.path.join("./logs", opt.tag, EXP_ID)
+        checkpoint_dir = os.path.join(log_root, "checkpoints")
+        run_dir = os.path.join(log_root,"runs")
+        utils.try_make_dir(checkpoint_dir)
+        utils.try_make_dir(run_dir)
+        config.LOG.ROOT_DIR = log_root
+
         # 初始化日志
-        logger = init_log(training=True)
+        logger = init_log(log_root)
 
         # 初始化训练的meta信息
-        meta = load_meta(new=True)
-        save_meta(meta)
+        meta = load_meta(log_root, new=True)
+        save_meta(log_root, meta) #保存训练数据信息
 
     # 初始化模型
     Model = get_model(config.MODEL.NAME)
@@ -84,7 +101,7 @@ with torch.no_grad():
     
     start_step = (start_epoch - 1) * len(train_dataloader)
     global_step = start_step
-    total_steps = opt.epochs * len(train_dataloader)
+    total_steps = config.OPTIMIZE.EPOCHS * len(train_dataloader)
     start = time.time()
 
     # 定义scheduler
@@ -92,7 +109,19 @@ with torch.no_grad():
 
     if is_first_gpu():
         # tensorboard日志
-        writer = create_summary_writer(log_root)
+        writer = create_summary_writer(run_dir)
+        # wandb可视化训练
+        if opt.start_wandb and "WANDB" in config:
+            wandb.init(
+                project = config.LOG.PROJECT_NAME,
+                group= config.LOG.GROUP_NAME,
+                job_type= config.LOG.TOB_TYPE,
+                name = opt.tag,
+                config= config
+            )
+            wandb.define_metric("steps")
+            wandb.define_metric("train/*",step_metric = "steps")
+            wandb.define_metric("val/*",step_metric = "steps")
     else:
         writer = None
 
@@ -113,8 +142,10 @@ with torch.no_grad():
 #try:
 if __name__ == '__main__':
     eval_result = ''
+    best_AP50 = 0
+    best_loss = 100
 
-    for epoch in range(start_epoch, opt.epochs + 1):
+    for epoch in range(start_epoch, config.OPTIMIZE.EPOCHS + 1):
         if is_distributed():
             train_dataloader.sampler.set_epoch(epoch)
         for iteration, sample in enumerate(train_dataloader):
@@ -154,23 +185,43 @@ if __name__ == '__main__':
                 utils.progress_bar(iteration, len(train_dataloader), pre_msg, msg)
             # print(pre_msg, msg)
 
-            if global_step % 1000 == 0 and is_first_gpu():  # 每1000个step将loss写到tensorboard
+            ## 记录训练集损失 训练集损失根据每个step记录
+            if is_first_gpu():
                 write_meters_loss(writer, 'train', model.avg_meters, global_step)
+                if opt.start_wandb and "WANDB" in config:
+                    loss_log_dict = {"steps":global_step}
+                    loss_log_dict.update(model.loss_details)
+                    wandb.log(loss_log_dict)
+
 
         if is_first_gpu():
             # 记录训练日志
             logger.info(f'Train epoch: {epoch}, lr: {round(scheduler.get_lr()[0], 6) : .6f}, (loss) ' + str(model.avg_meters))
-
-        if epoch % config.MISC.SAVE_FREQ == 0 or epoch == opt.epochs:  # 最后一个epoch要保存一下
-            if is_first_gpu():
-                model.save(epoch)
-
-        # 训练时验证
-        if not opt.no_val and epoch % config.MISC.VAL_FREQ == 0:
-            if is_first_gpu():
+            if not opt.no_val and epoch % config.MISC.VAL_FREQ == 0:
                 model.eval()
-                evaluate(model, val_dataloader, epoch, writer, logger, data_name='val')
+                
+                valid_loss_details = model.valid(val_dataloader)
+                valid_metrics = model.evaluate(val_dataloader, epoch, writer, logger, data_name='val')
+                train_metrics = model.evaluate(train_dataloader, epoch, writer, logger, data_name='train')
+                val_loss = valid_loss_details["val/loss"]
+                val_AP50 = valid_metrics["val/AP50"]
+                if is_first_gpu() and opt.start_wandb and "WANDB" in config:
+                    metric_dict = {"steps":global_step}
+                    metric_dict.update(valid_loss_details)
+                    metric_dict.update(valid_metrics)
+                    metric_dict.update(train_metrics)
+                    wandb.log(metric_dict)
                 model.train()
+    
+            if epoch % config.MISC.SAVE_FREQ == 0 or epoch == config.OPTIMIZE.EPOCHS:  # 最后一个epoch要保存一下
+                model.save(checkpoint_dir, epoch)
+            if val_AP50 > best_AP50:
+                best_AP50 = val_AP50
+                model.save(checkpoint_dir, "best_AP50")
+            if  val_loss < best_loss:
+                best_loss = val_loss
+                model.save(checkpoint_dir, "best_loss")
+
 
         if scheduler is not None:
             scheduler.step()
@@ -190,7 +241,8 @@ if __name__ == '__main__':
 
     if is_distributed():
         dist.destroy_process_group()
-
+if is_first_gpu() and opt.start_wandb and "WANDB" in config:
+    wandb.finish()
 """
 except Exception as e:
     
