@@ -42,6 +42,9 @@ def parse_args():
     # # test time bbox settings
     parser.add_argument('--no_val', '-no_eval', action='store_true', help='do not evaluate')
 
+    # # start wandb 默认不启动
+    parser.add_argument('--start_wandb', action='store_true', help="start wandb")
+
     return parser.parse_args()
 
 
