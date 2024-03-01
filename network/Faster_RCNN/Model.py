@@ -60,7 +60,7 @@ class Model(BaseModel):
         # 定义backbone和Faster RCNN模型
         if config.MODEL.BACKBONE is None or config.MODEL.BACKBONE.lower() in ['res50', 'resnet50']:
             # 默认是带fpn的resnet50
-            self.detector = fasterrcnn_resnet50_fpn(pretrained=False, **kargs)
+            self.detector = fasterrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=config.MODEL.BACKBONE_PRETRAINED, **kargs)
 
             in_features = self.detector.roi_heads.box_predictor.cls_score.in_features
 
@@ -68,12 +68,12 @@ class Model(BaseModel):
             self.detector.roi_heads.box_predictor = FastRCNNPredictor(in_features, config.DATA.NUM_CLASSESS + 1)
 
         elif config.MODEL.BACKBONE.lower() in ['vgg16', 'vgg']:
-            backbone = vgg16_backbone()
+            backbone = vgg16_backbone(config.MODEL.BACKBONE_PRETRAINED)
             self.detector = FasterRCNN(backbone, num_classes=config.DATA.NUM_CLASSESS + 1, **kargs)
 
         elif config.MODEL.BACKBONE.lower() in ['res101', 'resnet101']:
             # 不带FPN的resnet101
-            backbone = res101_backbone()
+            backbone = res101_backbone(config.MODEL.BACKBONE_PRETRAINED)
             self.detector = FasterRCNN(backbone, num_classes=config.DATA.NUM_CLASSESS + 1, **kargs)
 
         elif config.MODEL.BACKBONE.lower() in ['res', 'resnet']:

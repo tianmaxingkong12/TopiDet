@@ -3,8 +3,8 @@ from torchvision.models import resnet101
 from torchvision.ops import misc as misc_nn_ops
 from torch import nn
 
-def vgg16_backbone():
-    backbone = vgg16(pretrained=True).features
+def vgg16_backbone(pretrained=True):
+    backbone = vgg16(pretrained).features
     backbone._modules.pop('30')  # 去掉最后一层Max_Pool层
 
     # for layer in range(10):  # 冻结conv3之前的层
@@ -15,8 +15,8 @@ def vgg16_backbone():
     backbone.out_channels = 512
     return backbone
 
-def res101_backbone():
-    res = resnet101(pretrained=True, norm_layer=misc_nn_ops.FrozenBatchNorm2d)
+def res101_backbone(pretrained=True):
+    res = resnet101(pretrained, norm_layer=misc_nn_ops.FrozenBatchNorm2d)
 
 
     # for name, parameter in backbone.named_parameters():  # 冻结layer2之前的层

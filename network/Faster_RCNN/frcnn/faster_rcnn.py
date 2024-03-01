@@ -330,6 +330,7 @@ def fasterrcnn_resnet50_fpn(pretrained=False, progress=True,
 
     if pretrained:
         # no need to download the backbone if pretrained is set
+        # 如果Faster-RCNN整个网络加载权重就不需要backnone的权重
         pretrained_backbone = False
 
     backbone = resnet_fpn_backbone('resnet50', pretrained_backbone, norm_layer=norm_layer)
