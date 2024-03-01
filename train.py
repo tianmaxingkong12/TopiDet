@@ -247,7 +247,6 @@ if __name__ == '__main__':
     if is_distributed():
         dist.destroy_process_group()
     if is_first_gpu() and opt.start_wandb and "WANDB" in config:
-        print("wandb finish")
         wandb.finish()
 """
 except Exception as e:

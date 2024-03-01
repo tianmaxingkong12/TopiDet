@@ -1,0 +1,36 @@
+MODEL:
+  NAME: Faster_RCNN
+  BACKBONE: resnet50
+  BACKBONE_PRETRAINED: false
+  # LOAD: ./pretrained/0_voc_FasterRCNN.pt
+DATA:
+  DATASET: voc
+  TRANSFORM: frcnn
+  SCALE: [800, 1333]
+OPTIMIZE:
+  OPTIMIZER: sgd
+  BASE_LR: 0.004 
+  SCHEDULER: none
+  BATCH_SIZE: 2
+  EPOCHS: 12
+TEST:
+  NMS_THRESH : 0.5  # nms iou thresh at test time
+  CONF_THRESH: 0.05 # confidence thresh to keep at test time
+MISC:
+  VAL_FREQ: 1
+  SAVE_FREQ: 3
+  NUM_WORKERS: 2
+WANDB:
+  PROJECT_NAME: VOC+Faster-RCNN
+  GROUP_NAME: lr_pretrained
+  JOB_TYPE: train
+  EXP_NAME: 
+  EXP_ID:
+LOG:
+  ROOT_DIR:
+
+
+
+
+
+
