@@ -109,15 +109,20 @@ with torch.no_grad():
 
     if is_first_gpu():
         # tensorboard日志
-        writer = create_summary_writer(run_dir)
+        tensorboard_dir = os.path.join(run_dir,"tensorboard")
+        utils.try_make_dir(tensorboard_dir)
+        writer = create_summary_writer(tensorboard_dir)
         # wandb可视化训练
         if opt.start_wandb and "WANDB" in config:
+            wandb_dir = os.path.join(run_dir, "wandb")
+            utils.try_make_dir(wandb_dir)
             wandb.init(
                 project = config.WANDB.PROJECT_NAME,
                 group= config.WANDB.GROUP_NAME,
                 job_type= config.WANDB.JOB_TYPE,
                 name = opt.tag,
-                config= config
+                config= config,
+                dir = wandb_dir
             )
             wandb.define_metric("steps")
             wandb.define_metric("train/*",step_metric = "steps")
@@ -241,8 +246,9 @@ if __name__ == '__main__':
 
     if is_distributed():
         dist.destroy_process_group()
-if is_first_gpu() and opt.start_wandb and "WANDB" in config:
-    wandb.finish()
+    if is_first_gpu() and opt.start_wandb and "WANDB" in config:
+        print("wandb finish")
+        wandb.finish()
 """
 except Exception as e:
     

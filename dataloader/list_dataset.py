@@ -81,6 +81,7 @@ def get_all_datasets():
                         transforms=train_transform,
                         first_gpu=is_first_gpu())
                 train_datasets.append(train_dataset)
+                config.DATA.TRAIN_NUM = len(train_dataset)
 
             if hasattr(dataset_item, 'val_split'):
                 val_dataset = VOCTrainValDataset(dataset_item.voc_root,
@@ -90,17 +91,20 @@ def get_all_datasets():
                         transforms=val_transform,
                         first_gpu=is_first_gpu())
                 val_datasets.append(val_dataset)
+                config.DATA.VAL_NUM = len(val_dataset)
 
         elif data_format == 'COCO':
             if hasattr(dataset_item, 'train_split'):
                 train_dataset = CocoDataset(dataset_item.voc_root, 
                         dataset_item.train_split, transforms=train_transform)
                 train_datasets.append(train_dataset)
+                config.DATA.TRAIN_NUM = len(train_dataset)
 
             if hasattr(dataset_item, 'val_split'):
                 val_dataset = CocoDataset(dataset_item.voc_root, 
                         dataset_item.val_split, transforms=val_transform)
                 val_datasets.append(val_dataset)
+                config.DATA.VALID_NUM = len(val_dataset)
         
     config.DATA.CLASS_NAMES = class_names
     config.DATA.NUM_CLASSESS = len(class_names)
