@@ -6,6 +6,7 @@ MODEL:
 DATA:
   DATASET: voc
   TRAIN_NUM:
+  TRAIN_SPLIT: train0712-1k.txt
   VAILD_NUM:
   TRANSFORM: frcnn
   SCALE: [800, 1333]

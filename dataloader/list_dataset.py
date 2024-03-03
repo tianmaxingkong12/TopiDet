@@ -75,9 +75,13 @@ def get_all_datasets():
         data_format = dataset_item.data_format
         if data_format == 'VOC':
             if hasattr(dataset_item, 'train_split'):
+                if "TRAIN_SPLIT" in config.DATA and config.DATA.TRAIN_SPLIT != None:
+                    train_split = config.DATA.TRAIN_SPLIT
+                else:
+                    train_split = dataset_item.train_split
                 train_dataset = VOCTrainValDataset(dataset_item.voc_root, 
                         dataset_item.class_names,
-                        split=dataset_item.train_split,
+                        split=train_split,
                         format=dataset_item.img_format,
                         transforms=train_transform,
                         first_gpu=is_first_gpu())
