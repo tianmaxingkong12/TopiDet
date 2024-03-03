@@ -122,16 +122,30 @@ class BaseModel(torch.nn.Module):
                 result.append(mAP)
                 if iou_thresh in [0.5, 0.75]:
                     logger.info(f'Eva({data_name}) epoch {epoch}, IoU: {iou_thresh}, APs: {str(APs[:10])}, mAP: {mAP}')
-
-                write_loss(writer, f'val/{data_name}', 'mAP', mAP, epoch)
+                    if iou_thresh == 0.5:
+                        AP50 = [_ for _ in APs]
+                    if iou_thresh == 0.75:
+                        AP75 = [_ for _ in APs]
+                if isinstance(epoch,int):
+                    write_loss(writer, f'val/{data_name}', 'mAP', mAP, epoch)
+                else:
+                    write_loss(writer, f'val/{data_name}', 'mAP', mAP, 0)
 
             logger.info(
                 f'Eva({data_name}) epoch {epoch}, mean of (AP50-AP95): {sum(result)/len(result)}')
             
             ## 构建返回的指标信息及损失
-            metrics[data_name+"/"+"AP50"] = result[0]
-            metrics[data_name+"/"+"AP75"] = result[5]
-            metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result) 
+            if data_name == "train" or data_name == "val":
+                metrics[data_name+"/"+"AP50"] = result[0]
+                metrics[data_name+"/"+"AP75"] = result[5]
+                metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result)
+
+            elif data_name == "test":
+                metrics[data_name+"/"+"AP50"] = result[0]
+                metrics[data_name+"/"+"AP75"] = result[5]
+                metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result)
+                metrics[data_name+"/"+"AP50_EachClass"] = AP50
+                metrics[data_name+"/"+"AP75_EachClass"] = AP75
             return metrics
 
 

@@ -71,8 +71,9 @@ class VOCTrainValDataset(dataset.Dataset):
         self.labels = [] 
         self.difficults = []
 
-        counter = defaultdict(int)
-        tot_bbox = 0
+        self.bbox_counter = defaultdict(int)
+        self.image_counter = defaultdict(int)
+        self.tot_bbox = 0
         difficult_bbox = 0
 
         """
@@ -89,7 +90,7 @@ class VOCTrainValDataset(dataset.Dataset):
                 utils.color_print(f'Use cached annoations.', 3)
 
             self.image_paths, self.bboxes, self.labels, self.difficults, \
-            counter, tot_bbox, difficult_bbox = data
+            self.image_counter, self.bbox_counter, self.tot_bbox, difficult_bbox = data
             
         else:  # 没有缓存文件
             with open(im_list, 'r') as f:
@@ -110,6 +111,7 @@ class VOCTrainValDataset(dataset.Dataset):
                     root = tree.getroot()
                     bboxes = []
                     labels = []
+                    temp_classes = set()
 
                     size = root.find('size')
                     width = int(size.find('width').text)
@@ -138,28 +140,33 @@ class VOCTrainValDataset(dataset.Dataset):
                         if x2 - x1 <= 2 or y2 - y1 <= 2:  # 面积很小的标注
                             continue
 
-                        counter[class_name] += 1
-                        tot_bbox += 1
+                        temp_classes.add(class_name)
+                        self.bbox_counter[class_name] += 1
+                        self.tot_bbox += 1
                         bboxes.append([x1, y1, x2, y2])
                         labels.append(class_id)
 
                     self.bboxes.append(bboxes)
                     self.labels.append(labels)
+                    for _clsname in temp_classes:
+                        self.image_counter[_clsname] += 1
+
+
 
             """
             存放到缓存文件
             """
             data = [self.image_paths, self.bboxes, self.labels, self.difficults, \
-                counter, tot_bbox, difficult_bbox]
+                self.image_counter, self.bbox_counter, self.tot_bbox, difficult_bbox]
 
             with open(cache_file, 'wb') as f:
                 pickle.dump(data, f)
 
         if first_gpu:
             for name in class_names:
-                utils.color_print(f'{name}: {counter[name]} ({counter[name]/tot_bbox*100:.2f}%)', 5)
+                utils.color_print(f'{name}: {self.bbox_counter[name]} ({self.bbox_counter[name]/self.tot_bbox*100:.2f}%)', 5)
         
-            utils.color_print(f'Total bboxes: {tot_bbox}', 4)
+            utils.color_print(f'Total bboxes: {self.tot_bbox}', 4)
             if difficult_bbox:
                 utils.color_print(f'{difficult_bbox} difficult bboxes ignored.', 1)
         

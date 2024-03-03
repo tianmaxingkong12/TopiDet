@@ -22,7 +22,7 @@ def collate_fn(batch):
     return target
 
 # Datasets
-train_dataset, val_dataset = get_all_datasets()
+train_dataset, val_dataset, test_dataset = get_all_datasets()
 
 # Dataloaders
 if train_dataset is None:
@@ -44,6 +44,16 @@ if val_dataset is None:
     val_dataloader = None
 else:
     val_dataloader = torch.utils.data.DataLoader(val_dataset,
+        shuffle=False,
+        collate_fn=collate_fn,
+        batch_size=config.OPTIMIZE.BATCH_SIZE,
+        num_workers=config.MISC.NUM_WORKERS // 2,
+        )
+    
+if test_dataset is None:
+    test_dataloader = None
+else:
+    test_dataloader = torch.utils.data.DataLoader(test_dataset,
         shuffle=False,
         collate_fn=collate_fn,
         batch_size=config.OPTIMIZE.BATCH_SIZE,

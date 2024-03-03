@@ -30,7 +30,7 @@ class ListTrainValDataset(dataset.Dataset):
         return self.length
 
 
-dataset_variables = ['voc_root', 'train_split', 'val_split', 'class_names', 'img_format', 'data_format']
+dataset_variables = ['voc_root', 'train_split', 'val_split', 'test_split', 'class_names', 'img_format', 'data_format']
 
 class ListDatasetItem(object):
     def __init__(self, d):
@@ -59,6 +59,7 @@ def get_all_datasets():
     
     train_datasets = []
     val_datasets = []
+    test_datasets = []
 
     class_names = []
     for dataset_name in config.DATA.DATASET:
@@ -92,6 +93,16 @@ def get_all_datasets():
                         first_gpu=is_first_gpu())
                 val_datasets.append(val_dataset)
                 config.DATA.VAL_NUM = len(val_dataset)
+            
+            if hasattr(dataset_item, "test_split"):
+                test_dataset = VOCTrainValDataset(dataset_item.voc_root,
+                        dataset_item.class_names,
+                        split=dataset_item.test_split,
+                        format=dataset_item.img_format,
+                        transforms=val_transform,
+                        first_gpu=is_first_gpu())
+                test_datasets.append(test_dataset)
+                config.DATA.TEST_NUM = len(test_dataset)
 
         elif data_format == 'COCO':
             if hasattr(dataset_item, 'train_split'):
@@ -118,7 +129,12 @@ def get_all_datasets():
         val_dataset = ListTrainValDataset(*val_datasets, transforms=val_transform)
     else:
         val_dataset = None
+    
+    if len(test_dataset):
+        test_dataset = ListTrainValDataset(*test_datasets, transforms=val_transform)
+    else:
+        test_dataset = None
 
-    return train_dataset, val_dataset
+    return train_dataset, val_dataset, test_dataset
         
 
