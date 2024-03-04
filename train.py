@@ -4,6 +4,7 @@ import pdb
 import time
 import numpy as np
 import datetime
+import math
 
 import torch
 import torch.distributed as dist
@@ -99,9 +100,18 @@ with torch.no_grad():
         # 开始训练
         print('Start training...')
     
-    start_step = (start_epoch - 1) * len(train_dataloader)
-    global_step = start_step
-    total_steps = config.OPTIMIZE.EPOCHS * len(train_dataloader)
+    ## 默认都是加载的以epoch保存的模型
+    if config.OPTIMIZE.USE_EPOCH:        
+        start_step = (start_epoch - 1) * len(train_dataloader)
+        global_step = start_step
+        end_epoch = config.OPTIMIZE.EPOCHS
+        total_steps = end_epoch * len(train_dataloader)
+    else:
+        start_step = (start_epoch - 1) * len(train_dataloader)
+        global_step = start_step
+        total_steps = config.OPTIMIZE.STEPS
+        end_epoch = math.ceil(total_steps / len(train_dataloader))
+
     start = time.time()
 
     # 定义scheduler
@@ -147,10 +157,10 @@ with torch.no_grad():
 #try:
 if __name__ == '__main__':
     eval_result = ''
-    best_AP50 = 0
-    best_loss = 100
+    val_AP50 = best_AP50 = 0
+    val_loss = best_loss = 100
 
-    for epoch in range(start_epoch, config.OPTIMIZE.EPOCHS + 1):
+    for epoch in range(start_epoch, end_epoch + 1):
         if is_distributed():
             train_dataloader.sampler.set_epoch(epoch)
         for iteration, sample in enumerate(train_dataloader):
@@ -166,6 +176,8 @@ if __name__ == '__main__':
             elif global_step == 500:
                 for param_group in model.optimizer.param_groups:
                     param_group['lr'] = base_lr
+            elif global_step > total_steps:
+                break
 
             # 计算剩余时间
             rate = (global_step - start_step) / (time.time() - start)
@@ -197,9 +209,35 @@ if __name__ == '__main__':
                     loss_log_dict = {"steps":global_step}
                     loss_log_dict.update(model.loss_details)
                     wandb.log(loss_log_dict)
+                if not config.OPTIMIZE.USE_EPOCH:
+                    # 记录训练日志
+                    logger.info(f'Train step: {global_step}, lr: {round(scheduler.get_lr()[0], 6) : .6f}, (loss) ' + str(model.avg_meters))
+                    if not opt.no_val and global_step % config.MISC.VAL_FREQ == 0:
+                        model.eval()
+                        valid_loss_details = model.valid(val_dataloader)
+                        valid_metrics = model.evaluate(val_dataloader, epoch, writer, logger, data_name='val')
+                        train_metrics = model.evaluate(train_dataloader, epoch, writer, logger, data_name='train')
+                        val_loss = valid_loss_details["val/loss"]
+                        val_AP50 = valid_metrics["val/AP50"]
+                        if is_first_gpu() and opt.start_wandb and "WANDB" in config:
+                            metric_dict = {"steps":global_step}
+                            metric_dict.update(valid_loss_details)
+                            metric_dict.update(valid_metrics)
+                            metric_dict.update(train_metrics)
+                            wandb.log(metric_dict)
+                        model.train()
+    
+                if global_step % config.MISC.SAVE_FREQ == 0 or global_step == total_steps:  # 最后一个epoch要保存一下
+                    model.save(checkpoint_dir, global_step)
+                if val_AP50 > best_AP50:
+                    best_AP50 = val_AP50
+                    model.save(checkpoint_dir, "best_AP50")
+                if  val_loss < best_loss:
+                    best_loss = val_loss
+                    model.save(checkpoint_dir, "best_loss")
 
 
-        if is_first_gpu():
+        if is_first_gpu() and config.OPTIMIZE.USE_EPOCH:
             # 记录训练日志
             logger.info(f'Train epoch: {epoch}, lr: {round(scheduler.get_lr()[0], 6) : .6f}, (loss) ' + str(model.avg_meters))
             if not opt.no_val and epoch % config.MISC.VAL_FREQ == 0:
