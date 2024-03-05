@@ -146,3 +146,4 @@ pretrained/
 wandb/*
 .ctfd_secret_key
 .vscode/*
+logs
