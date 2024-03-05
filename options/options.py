@@ -73,7 +73,7 @@ def set_config():
 
     if opt.tag != 'default':
         pid = f'[PID:{os.getpid()}]'
-        with open('run_log.txt', 'a') as f:
+        with open('./logs/run_log.txt', 'a') as f:
             f.writelines(utils.get_time_str(fmt="%Y-%m-%d %H:%M:%S") + ' ' + pid + ' ' + get_command_run() + '\n')
 
     return config
