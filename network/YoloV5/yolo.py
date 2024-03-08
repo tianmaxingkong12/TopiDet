@@ -4,6 +4,7 @@ from copy import deepcopy
 from .experimental import *
 
 class Detect(nn.Module):
+    # YOLOv5 Detect head for detection models
     def __init__(self, nc=80, anchors=(), ch=()):  # detection layer
         super(Detect, self).__init__()
         self.stride = None  # strides computed during build
@@ -46,7 +47,7 @@ class Detect(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None):  # model, input channels, number of classes
-        super(Model, self).__init__(config, kwargs)
+        super(Model, self).__init__()
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
         else:  # is *.yaml

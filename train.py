@@ -61,8 +61,9 @@ with torch.no_grad():
         #       |--checkpoints
         #       |--runs
         EXP_ID = datetime.datetime.strftime(datetime.datetime.now(),"%Y%m%d-%H%M%S")
-        config.WANDB.EXP_ID = EXP_ID
-        config.WANDB.EXP_NAME = opt.tag
+        if opt.start_wandb and "WANDB" in config:
+            config.WANDB.EXP_ID = EXP_ID
+            config.WANDB.EXP_NAME = opt.tag
         # 初始化路径
         log_root = os.path.join("./logs", opt.tag, EXP_ID)
         checkpoint_dir = os.path.join(log_root, "checkpoints")
@@ -227,14 +228,14 @@ if __name__ == '__main__':
                             wandb.log(metric_dict)
                         model.train()
     
-                if global_step % config.MISC.SAVE_FREQ == 0 or global_step == total_steps:  # 最后一个epoch要保存一下
-                    model.save(checkpoint_dir, global_step)
-                if val_AP50 > best_AP50:
-                    best_AP50 = val_AP50
-                    model.save(checkpoint_dir, "best_AP50")
-                if  val_loss < best_loss:
-                    best_loss = val_loss
-                    model.save(checkpoint_dir, "best_loss")
+                    if global_step % config.MISC.SAVE_FREQ == 0 or global_step == total_steps:  # 最后一个epoch要保存一下
+                        model.save(checkpoint_dir, global_step)
+                    if val_AP50 > best_AP50:
+                        best_AP50 = val_AP50
+                        model.save(checkpoint_dir, "best_AP50")
+                    if  val_loss < best_loss:
+                        best_loss = val_loss
+                        model.save(checkpoint_dir, "best_loss")
 
 
         if is_first_gpu() and config.OPTIMIZE.USE_EPOCH:

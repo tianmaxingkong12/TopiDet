@@ -1,5 +1,6 @@
 import pdb
 import sys
+from collections import defaultdict
 import numpy as np
 import torch
 import os
@@ -41,10 +42,11 @@ hyp = {'momentum': 0.937,  # SGD momentum
        'shear': 0.0}  # image shear (+/- deg)
 
 class Model(BaseModel):
-    def __init__(self, opt, logger=None):
+    def __init__(self, config, **kwargs):
         super(Model, self).__init__(config, kwargs)
-        self.opt = opt
-        cfgfile = 'configs/yolov5x.yaml'
+        self.config = config
+
+        cfgfile = config.MODEL.MODEL_CONFIG ## 网络结构
         self.detector = Yolo5(cfgfile)
         self.detector.hyp = hyp
         self.detector.gr = 1.0
@@ -56,13 +58,15 @@ class Model(BaseModel):
 
         if opt.debug:
             print_network(self.detector)
+        self.to(opt.device)
 
-        self.optimizer = get_optimizer(opt, self.detector)
-        self.scheduler = get_scheduler(opt, self.optimizer)
+        self.optimizer = get_optimizer(config, self.detector)
+        self.scheduler = get_scheduler(config, self.optimizer)
 
         self.avg_meters = ExponentialMovingAverage(0.95)
         self.save_dir = os.path.join('checkpoints', opt.tag)
         self.it = 0
+        self.loss_details = dict()
 
     def update(self, sample, *arg):
         """
@@ -86,11 +90,18 @@ class Model(BaseModel):
         #         if 'momentum' in x:
         #             x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
 
-        image = sample['image'].to(opt.device)  # target domain
+        image = sample['image']  # target domain
+        image = torch.stack(image,dim=0).to(opt.device)
         target = sample['yolo5_boxes'].to(opt.device)
         pred = self.detector(image)
         loss, loss_items = compute_loss(pred, target.to(opt.device), self.detector)
         self.avg_meters.update({'loss': sum(loss_items).item()})
+        
+        ##添加需要输出的loss信息
+        self.loss_details["train/loss_bbox"] = loss_items[0].item()
+        self.loss_details["train/loss_classifier"] = loss_items[2].item()
+        self.loss_details["train/loss_objectness"] = loss_items[1].item()
+        self.loss_details["train/loss"] = loss_items[3].item()
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -103,7 +114,8 @@ class Model(BaseModel):
         batch_bboxes = []
         batch_labels = []
         batch_scores = []
-
+        
+        image = torch.stack(image,dim=0).to(opt.device)
         inf_out, _ = self.detector(image)
         
         bboxes = non_max_suppression(inf_out, conf_thres=0.001, iou_thres=0.65, merge=False)
@@ -170,6 +182,26 @@ class Model(BaseModel):
 
     def inference(self, x, progress_idx=None):
         raise NotImplementedError
+    
+    def valid(self, dataloader):
+        loss_details = defaultdict(float)
+        bs = 0
+        with torch.no_grad():
+            for i, sample in enumerate(dataloader):
+                image = sample['image']  # target domain
+                image = torch.stack(image,dim=0).to(opt.device)
+                target = sample['yolo5_boxes'].to(opt.device)
+                _, pred = self.detector(image)
+                loss, loss_items = compute_loss(pred, target.to(opt.device), self.detector)
+                
+                loss_details["val/loss_bbox"] = loss_items[0].item()
+                loss_details["val/loss_classifier"] = loss_items[2].item()
+                loss_details["val/loss_objectness"] = loss_items[1].item()
+                loss_details["val/loss"] += loss_items[3].item()
+                bs += 1 
+        for _loss in loss_details:
+            loss_details[_loss] /= bs
+        return loss_details
 
     def evaluate(self, dataloader, epoch, writer, logger, data_name='val'):
         return self.eval_mAP(dataloader, epoch, writer, logger, data_name)
@@ -183,7 +215,7 @@ class Model(BaseModel):
         # self.detector.load_state_dict(state)
         return super(Model, self).load(ckpt_path)
 
-    def save(self, which_epoch):
-        super(Model, self).save(which_epoch)
+    def save(self, save_dir, which_epoch):
+        super(Model, self).save(save_dir, which_epoch)
 
 
