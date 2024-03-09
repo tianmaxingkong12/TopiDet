@@ -7,6 +7,7 @@ import datetime
 import math
 
 import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 import torch.distributed as dist
 from torch import optim
 from torch.autograd import Variable
