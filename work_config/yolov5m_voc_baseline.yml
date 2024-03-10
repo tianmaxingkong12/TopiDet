@@ -1,6 +1,6 @@
 MODEL:
   NAME: Yolo5
-  MODEL_CONFIG: configs/networks/yolov5l.yaml
+  MODEL_CONFIG: configs/networks/yolov5m.yaml
 DATA:
   DATASET: voc
   TRANSFORM: yolo2
@@ -22,7 +22,7 @@ MISC:
 LOG:
   ROOT_DIR: 
 WANDB:
-  PROJECT_NAME: VOC-YoloV5
+  PROJECT_NAME: VOC-yolov5
   GROUP_NAME: baseline
   JOB_TYPE: train
   EXP_NAME: 
