@@ -17,29 +17,62 @@ from scheduler import get_scheduler
 from network.base_model import BaseModel
 from mscv import ExponentialMovingAverage, print_network, load_checkpoint, save_checkpoint
 from mscv.summary import write_image, write_loss
-from .utils import *
+from .utils.loss import ComputeLoss
 # from mscv.cnn import normal_init
 
 from torchvision.ops import nms
-from .utils import non_max_suppression
+from .utils.general import non_max_suppression
 from utils.ensemble_boxes.ensemble_boxes_wbf import weighted_boxes_fusion
 
 import misc_utils as utils
 
-hyp = {'momentum': 0.937,  # SGD momentum
-       'weight_decay': 5e-4,  # optimizer weight decay
-       'giou': 0.05,  # giou loss gain
-       'cls': 0.58,  # cls loss gain
-       'cls_pw': 1.0,  # cls BCELoss positive_weight
-       'obj': 1.0,  # obj loss gain (*=img_size/320 if img_size != 320)
-       'obj_pw': 1.0,  # obj BCELoss positive_weight
-       'iou_t': 0.20,  # iou training threshold
-       'anchor_t': 4.0,  # anchor-multiple threshold
-       'fl_gamma': 0.0,  # focal loss gamma (efficientDet default is gamma=1.5)
-       'degrees': 0.0,  # image rotation (+/- deg)
-       'translate': 0.0,  # image translation (+/- fraction)
-       'scale': 0.5,  # image scale (+/- gain)
-       'shear': 0.0}  # image shear (+/- deg)
+# hyp = {'momentum': 0.937,  # SGD momentum
+#        'weight_decay': 5e-4,  # optimizer weight decay
+#        'giou': 0.05,  # giou loss gain
+#        'cls': 0.58,  # cls loss gain
+#        'cls_pw': 1.0,  # cls BCELoss positive_weight
+#        'obj': 1.0,  # obj loss gain (*=img_size/320 if img_size != 320)
+#        'obj_pw': 1.0,  # obj BCELoss positive_weight
+#        'iou_t': 0.20,  # iou training threshold
+#        'anchor_t': 4.0,  # anchor-multiple threshold
+#        'fl_gamma': 0.0,  # focal loss gamma (efficientDet default is gamma=1.5)
+#        'degrees': 0.0,  # image rotation (+/- deg)
+#        'translate': 0.0,  # image translation (+/- fraction)
+#        'scale': 0.5,  # image scale (+/- gain)
+#        'shear': 0.0}  # image shear (+/- deg)
+
+# Hyperparameters for VOC training
+hyp = {
+    "lr0": 0.00334,
+    "lrf": 0.15135,
+    "momentum": 0.74832,
+    "weight_decay": 0.00025,
+    "warmup_epochs": 3.3835,
+   "warmup_momentum": 0.59462,
+    "warmup_bias_lr": 0.18657,
+    "box": 0.02,
+    "cls": 0.21638,
+    "cls_pw": 0.5,
+    "obj": 0.51728,
+    "obj_pw": 0.67198,
+    "iou_t": 0.2,
+    "anchor_t": 3.3744,
+    "fl_gamma": 0.0,
+    "hsv_h": 0.01041,
+    "hsv_s": 0.54703,
+    "hsv_v": 0.27739,
+    "degrees": 0.0,
+    "translate": 0.04591,
+    "scale": 0.75544,
+    "shear": 0.0,
+    "perspective": 0.0,
+    "flipud": 0.0,
+    "fliplr": 0.5,
+    "mosaic": 0.85834,
+    "mixup": 0.04266,
+    "copy_paste": 0.0,
+    "anchors": 3.412
+}
 
 class Model(BaseModel):
     def __init__(self, config, **kwargs):
@@ -94,14 +127,14 @@ class Model(BaseModel):
         image = torch.stack(image,dim=0).to(opt.device)
         target = sample['yolo5_boxes'].to(opt.device)
         pred = self.detector(image)
-        loss, loss_items = compute_loss(pred, target.to(opt.device), self.detector)
+        loss, loss_items = ComputeLoss(self.detector)(pred, target.to(opt.device))
         self.avg_meters.update({'loss': sum(loss_items).item()})
         
         ##添加需要输出的loss信息
         self.loss_details["train/loss_bbox"] = loss_items[0].item()
         self.loss_details["train/loss_classifier"] = loss_items[2].item()
         self.loss_details["train/loss_objectness"] = loss_items[1].item()
-        self.loss_details["train/loss"] = loss_items[3].item()
+        self.loss_details["train/loss"] = sum(loss_items).item()
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -118,7 +151,7 @@ class Model(BaseModel):
         image = torch.stack(image,dim=0).to(opt.device)
         inf_out, _ = self.detector(image)
         
-        bboxes = non_max_suppression(inf_out, conf_thres=0.001, iou_thres=0.65, merge=False)
+        bboxes = non_max_suppression(inf_out, conf_thres=0.05, iou_thres=0.5, multi_label=True)
 
         b = len(bboxes)
         for bi in range(b):
@@ -192,12 +225,12 @@ class Model(BaseModel):
                 image = torch.stack(image,dim=0).to(opt.device)
                 target = sample['yolo5_boxes'].to(opt.device)
                 _, pred = self.detector(image)
-                loss, loss_items = compute_loss(pred, target.to(opt.device), self.detector)
+                loss, loss_items = ComputeLoss(self.detector)(pred, target.to(opt.device))
                 
                 loss_details["val/loss_bbox"] = loss_items[0].item()
                 loss_details["val/loss_classifier"] = loss_items[2].item()
                 loss_details["val/loss_objectness"] = loss_items[1].item()
-                loss_details["val/loss"] += loss_items[3].item()
+                loss_details["val/loss"] += sum(loss_items).item()
                 bs += 1 
         for _loss in loss_details:
             loss_details[_loss] /= bs
