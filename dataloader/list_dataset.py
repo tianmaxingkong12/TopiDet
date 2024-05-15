@@ -120,6 +120,13 @@ def get_all_datasets():
                         dataset_item.val_split, transforms=val_transform)
                 val_datasets.append(val_dataset)
                 config.DATA.VALID_NUM = len(val_dataset)
+            
+            if hasattr(dataset_item, 'test_split'):
+                test_dataset = CocoDataset(dataset_item.voc_root, 
+                        dataset_item.test_split, transforms=val_transform)
+                test_datasets.append(test_dataset)
+                config.DATA.TEST_NUM = len(test_dataset)
+
         
     config.DATA.CLASS_NAMES = class_names
     config.DATA.NUM_CLASSESS = len(class_names)
