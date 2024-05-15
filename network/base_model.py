@@ -62,18 +62,16 @@ class BaseModel(torch.nn.Module):
                 一个batch的预测分数，np.float格式
         """
         pass
-
-    def eval_mAP(self, dataloader, epoch, writer, logger, data_name='val'):
-        # eval_yolo(self.detector, dataloader, epoch, writer, logger, dataname=data_name)
+    
+    def validation(self, dataloader):
         pred_bboxes = []
         pred_labels = []
         pred_scores = []
         gt_bboxes = []
         gt_labels = []
         gt_difficults = []
-        metrics = dict()
+        image_ids = []
 
-        
         with torch.no_grad():
             for i, sample in enumerate(dataloader):
                 utils.progress_bar(i, len(dataloader), 'Eva... ')
@@ -82,8 +80,10 @@ class BaseModel(torch.nn.Module):
                 labels = sample['labels']
                 paths = sample['path']
 
+                batch_image_ids = sample["image_id"]
                 batch_bboxes, batch_labels, batch_scores = self.forward_test(image)
 
+                image_ids.extend(batch_image_ids)
                 pred_bboxes.extend(batch_bboxes)
                 pred_labels.extend(batch_labels)
                 pred_scores.extend(batch_scores)
@@ -92,67 +92,63 @@ class BaseModel(torch.nn.Module):
                     gt_bboxes.append(gt_bbox[b].detach().cpu().numpy())
                     gt_labels.append(labels[b].int().detach().cpu().numpy())
                     gt_difficults.append(np.array([False] * len(gt_bbox[b])))
+        return  pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, gt_difficults, image_ids
 
-                if opt.vis:  # 可视化预测结果
-                    img = tensor2im(image).copy()
-                    # for x1, y1, x2, y2 in gt_bbox[0]:
-                    #     cv2.rectangle(img, (x1,y1), (x2,y2), (0, 255, 0), 2)  # 绿色的是gt
+    def eval_mAP(self, dataloader, epoch, writer, logger, data_name='val'):
+        pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, gt_difficults, image_ids = self.validation(dataloader)
+        metrics = dict()            
+        # pred_labels = [i+1 for i in pred_labels] ## COCO
+        result = []
+        for iou_thresh in [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]:
+            AP = eval_detection_voc(
+                pred_bboxes,
+                pred_labels,
+                pred_scores,
+                gt_bboxes,
+                gt_labels,
+                gt_difficults=None,
+                iou_thresh=iou_thresh,
+                use_07_metric=False)
 
-                    num = len(batch_scores[0])
-                    visualize_boxes(image=img, boxes=batch_bboxes[0],
-                             labels=batch_labels[0].astype(np.int32), probs=batch_scores[0], class_labels=config.DATA.CLASS_NAMES)
+            APs = AP['ap']
+            mAP = AP['map']
+            result.append(mAP)
+            if iou_thresh in [0.5, 0.75]:
+                logger.info(f'Eva({data_name}) epoch {epoch}, IoU: {iou_thresh}, APs: {str(APs[:10])}, mAP: {mAP}')
+                if iou_thresh == 0.5:
+                    AP50 = [_ for _ in APs]
+                if iou_thresh == 0.75:
+                    AP75 = [_ for _ in APs]
+            if isinstance(epoch,int):
+                write_loss(writer, f'val/{data_name}', 'mAP', mAP, epoch)
+            else:
+                write_loss(writer, f'val/{data_name}', 'mAP', mAP, 0)
 
-                    write_image(writer, f'{data_name}/{i}', 'image', img, epoch, 'HWC')
-
-
-            result = []
-            for iou_thresh in [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95]:
-                AP = eval_detection_voc(
-                    pred_bboxes,
-                    pred_labels,
-                    pred_scores,
-                    gt_bboxes,
-                    gt_labels,
-                    gt_difficults=None,
-                    iou_thresh=iou_thresh,
-                    use_07_metric=False)
-
-                APs = AP['ap']
-                mAP = AP['map']
-                result.append(mAP)
-                if iou_thresh in [0.5, 0.75]:
-                    logger.info(f'Eva({data_name}) epoch {epoch}, IoU: {iou_thresh}, APs: {str(APs[:10])}, mAP: {mAP}')
-                    if iou_thresh == 0.5:
-                        AP50 = [_ for _ in APs]
-                    if iou_thresh == 0.75:
-                        AP75 = [_ for _ in APs]
-                if isinstance(epoch,int):
-                    write_loss(writer, f'val/{data_name}', 'mAP', mAP, epoch)
-                else:
-                    write_loss(writer, f'val/{data_name}', 'mAP', mAP, 0)
-
-            logger.info(
-                f'Eva({data_name}) epoch {epoch}, mean of (AP50-AP95): {sum(result)/len(result)}')
+        logger.info(
+            f'Eva({data_name}) epoch {epoch}, mean of (AP50-AP95): {sum(result)/len(result)}')
             
-            ## 构建返回的指标信息及损失
-            if data_name == "train" or data_name == "val":
-                metrics[data_name+"/"+"AP50"] = result[0]
-                metrics[data_name+"/"+"AP75"] = result[5]
-                metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result)
+        ## 构建返回的指标信息及损失
+        if data_name == "train" or data_name == "val":
+            metrics[data_name+"/"+"AP50"] = result[0]
+            metrics[data_name+"/"+"AP75"] = result[5]
+            metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result)
 
-            elif data_name == "test":
-                metrics[data_name+"/"+"AP50"] = result[0]
-                metrics[data_name+"/"+"AP75"] = result[5]
-                metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result)
-                metrics[data_name+"/"+"AP50_EachClass"] = AP50
-                metrics[data_name+"/"+"AP75_EachClass"] = AP75
-            return metrics
+        elif data_name == "test":
+            metrics[data_name+"/"+"AP50"] = result[0]
+            metrics[data_name+"/"+"AP75"] = result[5]
+            metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result)
+            metrics[data_name+"/"+"AP50_EachClass"] = AP50
+            metrics[data_name+"/"+"AP75_EachClass"] = AP75
+        return metrics
 
 
     def load(self, ckpt_path):
-        if ckpt_path[-2:] != 'pt':
+        if ckpt_path[-2:] != 'pt' and ckpt_path[-3:] != "pth":
             return 0
-            
+        if ckpt_path[-3:] == "pth":
+            self.detector.load_state_dict(torch.load(ckpt_path))
+            return 0
+        
         load_dict = {
             'detector': self.detector,
         }
@@ -176,6 +172,28 @@ class BaseModel(torch.nn.Module):
         epoch = ckpt_info.get('epoch', 0)
 
         return epoch
+
+    def save_preds(self, dataloader):
+        # save inference preds in COCO format 
+        # pred_bboxes 图的数量 * bbox的数量 * x1y1x2y2
+        # pred_labels 图的数量 * bbox的数量 
+        # pred_scores 图的数量 * bbox的数量
+        pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, gt_difficults, image_ids = self.validation(dataloader)
+        jdict = []
+        for i in range(len(pred_bboxes)):
+            for j in range(len(pred_bboxes[i])):
+                x1, y1, x2, y2 = pred_bboxes[i][j]
+                x1, y1, x2, y2 = float(x1), float(y1), float(x2), float(y2),  
+                width = max(0, x2 - x1)
+                height = max(0, y2 - y1)
+                _pred_bbox = {
+                    "image_id": int(image_ids[i]), 
+                    "category_id": int(pred_labels[i][j])+1, 
+                    "bbox": [x1, y1, width, height], 
+                    "score": float(pred_scores[i][j]),
+                }
+                jdict.append(_pred_bbox)
+        return jdict
 
     def save(self, save_dir, which_epoch, published=False):
         save_filename = f'{which_epoch}_{self.config.MODEL.NAME}.pt'
