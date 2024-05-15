@@ -1,5 +1,7 @@
 # encoding=utf-8
 from torch.utils.data import DataLoader, DistributedSampler
+import torch
+torch.multiprocessing.set_sharing_strategy('file_system')
 from dataloader.list_dataset import get_all_datasets
 
 from options import opt, config
@@ -14,6 +16,7 @@ def collate_fn(batch):
     target['bboxes'] = [sample['bboxes'] for sample in batch]
     target['labels'] = [sample['labels'] for sample in batch]
     target['path'] = [sample['path'] for sample in batch]
+    target['image_id'] = [sample["image_id"] for sample in batch]
     target['yolo_boxes'] = torch.stack([sample['yolo_boxes'] for sample in batch])
     target['yolo4_boxes'] = torch.stack([sample['yolo4_boxes'] for sample in batch])
     target['yolo5_boxes'] = torch.cat(  # [b*50, 6] batch中第几张图片, label, c_x, c_y, w, h
