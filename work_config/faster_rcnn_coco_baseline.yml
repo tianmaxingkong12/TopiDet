@@ -22,9 +22,9 @@ MISC:
   SAVE_FREQ: 1
   NUM_WORKERS: 2
 WANDB:
-  PROJECT_NAME: COCO-Faster-RCNN-debug
+  PROJECT_NAME: COCO-Faster-RCNN
   GROUP_NAME: baseline
-  JOB_TYPE: test
+  JOB_TYPE: train
   EXP_NAME: 
   EXP_ID:
 LOG:
