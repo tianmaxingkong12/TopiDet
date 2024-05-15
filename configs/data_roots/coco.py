@@ -3,10 +3,10 @@ from albumentations.pytorch.transforms import ToTensorV2
 
 class Data(object):
     data_format = 'COCO'
-    voc_root = 'datasets/coco'
-    train_split = 'train2017'
-    val_split = 'val2017' 
-
+    voc_root = 'datasets/COCO2017'
+    train_split = 'train0511'
+    val_split = 'val0511'
+    test_split = "val2017"
     class_names = [
         'person', 'bicycle', 'car', 'motorcycle', 'airplane',
         'bus', 'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
