@@ -148,3 +148,4 @@ wandb/*
 .vscode/*
 logs
 ckpt/
+preds/
