@@ -157,6 +157,7 @@ class Model(BaseModel):
             detector = self.detector.module
         loss_details = defaultdict(float)
         bs = 0
+        NO_GT_BBOX_FLAG = False
         with torch.no_grad():
             for i, sample in enumerate(dataloader):
                 labels = sample['labels']
@@ -165,7 +166,9 @@ class Model(BaseModel):
                 image, bboxes, labels = sample['image'], sample['bboxes'], sample['labels']
                 for b in range(len(image)):
                     if len(bboxes[b]) == 0:  # 没有bbox，不更新参数
-                        return {}
+                        NO_GT_BBOX_FLAG = True
+                if NO_GT_BBOX_FLAG:
+                    continue
                 bboxes = [bbox.to(opt.device).float() for bbox in bboxes]
                 labels = [label.to(opt.device).float() for label in labels]
                 images = list(im.to(opt.device) for im in image)
