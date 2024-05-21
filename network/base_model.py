@@ -16,6 +16,7 @@ from mscv import load_checkpoint, save_checkpoint
 from mscv.image import tensor2im
 from mscv.summary import write_loss, write_image
 from utils.vis import visualize_boxes
+from dataloader.coco import coco_80_to_90_classes
 
 class BaseModel(torch.nn.Module):
     def __init__(self, config, kwargs):
@@ -173,11 +174,12 @@ class BaseModel(torch.nn.Module):
 
         return epoch
 
-    def save_preds(self, dataloader):
+    def save_preds(self, dataloader, convert_COCO_label = False):
         # save inference preds in COCO format 
         # pred_bboxes 图的数量 * bbox的数量 * x1y1x2y2
         # pred_labels 图的数量 * bbox的数量 
         # pred_scores 图的数量 * bbox的数量
+        label_convert = coco_80_to_90_classes if convert_COCO_label else lambda x:x+1
         pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, gt_difficults, image_ids = self.validation(dataloader)
         jdict = []
         for i in range(len(pred_bboxes)):
@@ -188,7 +190,7 @@ class BaseModel(torch.nn.Module):
                 height = max(0, y2 - y1)
                 _pred_bbox = {
                     "image_id": int(image_ids[i]), 
-                    "category_id": int(pred_labels[i][j])+1, 
+                    "category_id": label_convert(int(pred_labels[i][j])), 
                     "bbox": [x1, y1, width, height], 
                     "score": float(pred_scores[i][j]),
                 }
