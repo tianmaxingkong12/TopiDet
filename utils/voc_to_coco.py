@@ -1,25 +1,27 @@
 # encoding=utf-8
 import ipdb
-
-import torch
-import torchvision.transforms.functional as F
 import os
 import json
-from PIL import Image
-import torch.utils.data.dataset as dataset
-from torchvision import transforms
-from options import opt
-import albumentations as A
-from mscv.summary import create_summary_writer, write_image
-import dataloader.dataloaders
-from dataloader.voc import VOCTrainValDataset
-from configs.data_roots import get_dataset
+import random
+import sys
+sys.path.append("/home/hanliming/Projects/TopiDet/")
 
 import xml.etree.ElementTree as ET
-import misc_utils as utils
-import random
 import numpy as np
 import cv2
+import torch
+import torch.utils.data.dataset as dataset
+import torchvision.transforms.functional as F
+from torchvision import transforms
+import albumentations as A
+from mscv.summary import create_summary_writer, write_image
+from PIL import Image
+import misc_utils as utils
+
+from configs.data_roots import get_one_dataset
+from options import opt, config
+import dataloader.dataloaders
+from dataloader.voc import VOCTrainValDataset
 
 
 preview_transform = A.Compose(
@@ -40,11 +42,13 @@ global_annotation_id = 0
 
 if __name__ == '__main__':
     opt.dataset = 'voc'
-    dataset = get_dataset(opt.dataset)
+    dataset = get_one_dataset(opt.dataset)
     d = dataset()
 
-    variable_names = ['voc_root', 'train_split', 'val_split', 'class_names', 'img_format', 
-                      'width', 'height', 'train_transform', 'val_transform']
+    # variable_names = ['voc_root', 'train_split', 'val_split', 'class_names', 'img_format', 
+    #                   'width', 'height', 'train_transform', 'val_transform']
+
+    variable_names = ['voc_root', 'train_split', 'val_split', "test_split",'class_names', 'img_format']
 
     for v in variable_names:
         # 等价于 exec(f'{v}=d.{v}')
@@ -61,16 +65,17 @@ if __name__ == '__main__':
         })
 
 
-    opt.width = width
-    opt.height = height
+    # opt.width = width
+    # opt.height = height
 
     voc_dataset = VOCTrainValDataset(voc_root, 
             class_names,
-            split=train_split,
+            split=test_split,
             format=img_format,
             transforms=preview_transform)
-
-    output_file = f'instances_{train_split[:-4]}.json'
+    
+    save_dir = "./datasets/VOC07_12/coco_annotations"
+    output_file = os.path.join(save_dir, f'instances_{test_split[:-4]}.json')
 
     for i, sample in enumerate(voc_dataset):
         utils.progress_bar(i, len(voc_dataset), 'Drawing...')
