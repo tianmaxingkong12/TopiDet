@@ -373,7 +373,9 @@ def yolo_ap_calculate(precision, recall, method = "interp"):
 
 if __name__ == "__main__":
     opt = parse_opt()
-    if opt.voc:
-        coco_evaluate(opt.gt, opt.pred, voc_to_coco.keys())
-    else:
-        coco_evaluate(opt.gt, opt.pred)
+    info = dict()
+    info["cat_names"] = ["sheep"]
+    info["confidence_threshold"] = 0.5
+    info["nms_iou_threshold"] = 1
+    info["match_iou_threshold"] = 0.5
+    post_process_analyse(opt.gt, opt.pred, info)
