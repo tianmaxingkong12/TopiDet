@@ -25,9 +25,12 @@ def evaluate(model, dataloader, epoch, writer, logger, data_name='val'):
     metrics = model.evaluate(dataloader, epoch, writer, logger, data_name)
     return metrics
 
-confidence_thresholds = [0.05,0.1,0.2,0.3,0.4,0.5] #6
-nms_iou_thresholds = [1.0,0.75,0.65,0.5,0.3,0.0] #6
-match_iou_thresholds = [0.5,0.75,0.95] #3
+# confidence_thresholds = [0.05,0.1,0.2,0.3,0.4,0.5] #6
+confidence_thresholds = [0.05] #1
+# nms_iou_thresholds = [1.0,0.75,0.65,0.60,0.55,0.5,0.45,0.35,0.3,0.0] #10
+# nms_iou_thresholds = [0.1,0.2,0.8,0.9] #4
+nms_iou_thresholds = [0.4,0.7]
+match_iou_thresholds = [0.3,0.4,0.5,0.75] #4
 cat_names = ["sheep"]
 gt_path = "./datasets/VOC07_12/annotations/instances_test2007.json"
 if __name__ == '__main__':
@@ -82,7 +85,7 @@ if __name__ == '__main__':
                 post_process_analyse(gt_path, output_file, info)
 
                 if opt.start_wandb and "WANDB" in _config:
-                    _config.WANDB.PROJECT_NAME = ""
+                    _config.WANDB.PROJECT_NAME = "PostProcess"
                     _config.WANDB.EXP_ID = EXP_ID
                     _config.WANDB.GROUP_NAME = "post_process"
                     _config.WANDB.JOB_TYPE = "evaluate"

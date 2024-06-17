@@ -33,7 +33,11 @@ if __name__ == '__main__':
     if not opt.load and 'LOAD' not in config.MODEL:
         print('Usage: eval.py [--tag TAG] --load LOAD')
         raise_exception('eval.py: the following arguments are required: --load')
-
+    if config.DATA.DATASET == ["voc_coco"]:
+        config.DATA.NUM_CLASSESS = 90 ##对于COCO
+    convert_COCO_label = False
+    if config.DATA.NUM_CLASSESS == 80:
+        convert_COCO_label = True
     Model = get_model(config.MODEL.NAME)
     model = Model(config)
     model = model.to(device=opt.device)
@@ -82,26 +86,31 @@ if __name__ == '__main__':
     logger.info('===========================================')
     # 测试集为test时输出详细信息
     metrics = evaluate(model, test_dataloader, which_epoch, writer, logger, 'test')
-    data = pd.DataFrame(columns = ["编号","类别名称","训练集图片数","训练集框数","测试集图片数","测试集框数","测试集AP50","测试集AP75"])
-    for _id, class_name in enumerate(config.DATA.CLASS_NAMES):
-        data.loc[_id,"编号"] = _id
-        data.loc[_id,"类别名称"] = class_name
-        data.loc[_id,"训练集图片数"] = train_dataset.datasets[0].image_counter[class_name]
-        data.loc[_id,"训练集框数"] = train_dataset.datasets[0].bbox_counter[class_name]
-        data.loc[_id,"测试集图片数"] = test_dataset.datasets[0].image_counter[class_name]
-        data.loc[_id,"测试集框数"] = test_dataset.datasets[0].bbox_counter[class_name]
-        data.loc[_id,"测试集AP50"] = metrics['test/AP50_EachClass'][_id]
-        data.loc[_id,"测试集AP75"] = metrics['test/AP75_EachClass'][_id]
-    data.to_excel(os.path.join(log_root,"results.xlsx"),index= False)
-    metric_info = {
-        "train_images":len(train_dataset),
-        "train_bbox": train_dataset.datasets[0].tot_bbox,
-        "test_images": len(test_dataset),
-        "test_bbox": test_dataset.datasets[0].tot_bbox,
-        "test_mAP50":metrics["test/AP50"],
-        "test_mAP75":metrics["test/AP75"],
-        "test_mAP50:95":metrics["test/AP50-AP95"] 
-    }
+    print(metrics)
+    coco_result = model.save_preds(test_dataloader, convert_COCO_label)
+    with open(os.path.join(log_root, "pred.json"), "w") as f:
+        json.dump(coco_result, f)
+    # data = pd.DataFrame(columns = ["编号","类别名称","训练集图片数","训练集框数","测试集图片数","测试集框数","测试集AP50","测试集AP75"])
+    # for _id, class_name in enumerate(config.DATA.CLASS_NAMES):
+    #     data.loc[_id,"编号"] = _id
+    #     data.loc[_id,"类别名称"] = class_name
+    #     # data.loc[_id,"训练集图片数"] = train_dataset.datasets[0].image_counter[class_name]
+    #     # data.loc[_id,"训练集框数"] = train_dataset.datasets[0].bbox_counter[class_name]
+    #     # data.loc[_id,"测试集图片数"] = test_dataset.datasets[0].image_counter[class_name]
+    #     # data.loc[_id,"测试集框数"] = test_dataset.datasets[0].bbox_counter[class_name]
+    #     data.loc[_id,"测试集AP50"] = metrics['test/AP50_EachClass'][_id]
+    #     data.loc[_id,"测试集AP75"] = metrics['test/AP75_EachClass'][_id]
+    # data.to_excel(os.path.join(log_root,"results.xlsx"),index= False)
+    # metric_info = {
+    #     "train_images":len(train_dataset),
+    #     "train_bbox": train_dataset.datasets[0].tot_bbox,
+    #     "test_images": len(test_dataset),
+    #     "test_bbox": test_dataset.datasets[0].tot_bbox,
+    #     "test_mAP50":metrics["test/AP50"],
+    #     "test_mAP75":metrics["test/AP75"],
+    #     "test_mAP50:95":metrics["test/AP50-AP95"] 
+    # }
+    
     if opt.start_wandb and "WANDB" in config:
         wandb.log({"Results":wandb.Table(dataframe = data)})
         # wandb.log(metric_info)
