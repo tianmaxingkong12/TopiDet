@@ -139,6 +139,10 @@ with torch.no_grad():
             wandb.define_metric("steps")
             wandb.define_metric("train/*",step_metric = "steps")
             wandb.define_metric("val/*",step_metric = "steps")
+            if config.DATA.DATASET == ["Lesion4K"]:
+                wandb.define_metric("val/AP50(11)",summary="max")
+                wandb.define_metric("val/AP50", summary="max")
+
     else:
         writer = None
 
@@ -163,7 +167,6 @@ if __name__ == '__main__':
     val_loss = best_loss = 100
 
     for epoch in range(start_epoch, end_epoch + 1):
-        print(start_epoch,end_epoch)
         if is_distributed():
             train_dataloader.sampler.set_epoch(epoch)
         for iteration, sample in enumerate(train_dataloader):
@@ -219,14 +222,20 @@ if __name__ == '__main__':
                         model.eval()
                         valid_loss_details = model.valid(val_dataloader)
                         valid_metrics = model.evaluate(val_dataloader, epoch, writer, logger, data_name='val')
-                        # train_metrics = model.evaluate(train_dataloader, epoch, writer, logger, data_name='train')
-                        val_loss = valid_loss_details["val/loss"]
-                        val_AP50 = valid_metrics["val/AP50"]
+                        train_metrics = model.evaluate(train_dataloader, epoch, writer, logger, data_name='train')
+                        val_loss = valid_loss_details["val/loss"] 
+                        metric_dict = {"steps":global_step}
+                        metric_dict.update(valid_loss_details)
+                        metric_dict.update(valid_metrics)
+                        metric_dict.update(train_metrics)
+                        if config.DATA.DATASET == ["Lesion4K"]:
+                            val_AP50_all = valid_metrics["val/AP50"]
+                            lesion_index = [0,1,3,4,5,7,8,10,11,13,14]
+                            val_AP50 = sum([valid_metrics["val/AP50_EachClass"][_] for _ in lesion_index])/11
+                            metric_dict.update({"val/AP50(11)":val_AP50})
+                        else:
+                            val_AP50 = valid_metrics["val/AP50"]
                         if is_first_gpu() and opt.start_wandb and "WANDB" in config:
-                            metric_dict = {"steps":global_step}
-                            metric_dict.update(valid_loss_details)
-                            metric_dict.update(valid_metrics)
-                            # metric_dict.update(train_metrics)
                             wandb.log(metric_dict)
                         model.train()
     
@@ -248,14 +257,20 @@ if __name__ == '__main__':
                 
                 valid_loss_details = model.valid(val_dataloader)
                 valid_metrics = model.evaluate(val_dataloader, epoch, writer, logger, data_name='val')
-                # train_metrics = model.evaluate(train_dataloader, epoch, writer, logger, data_name='train')
+                train_metrics = model.evaluate(train_dataloader, epoch, writer, logger, data_name='train')
                 val_loss = valid_loss_details["val/loss"]
-                val_AP50 = valid_metrics["val/AP50"]
+                metric_dict = {"steps":global_step}
+                metric_dict.update(valid_loss_details)
+                metric_dict.update(valid_metrics)
+                metric_dict.update(train_metrics)
+                if config.DATA.DATASET == ["Lesion4K"]:
+                    val_AP50_all = valid_metrics["val/AP50"]
+                    lesion_index = [0,1,3,4,5,7,8,10,11,13,14]
+                    val_AP50 = sum([valid_metrics["val/AP50_EachClass"][_] for _ in lesion_index])/11
+                    metric_dict.update({"val/AP50(11)":val_AP50})
+                else:
+                    val_AP50 = valid_metrics["val/AP50"]
                 if is_first_gpu() and opt.start_wandb and "WANDB" in config:
-                    metric_dict = {"steps":global_step}
-                    metric_dict.update(valid_loss_details)
-                    metric_dict.update(valid_metrics)
-                    # metric_dict.update(train_metrics)
                     wandb.log(metric_dict)
                 model.train()
     

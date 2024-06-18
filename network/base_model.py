@@ -115,7 +115,7 @@ class BaseModel(torch.nn.Module):
             mAP = AP['map']
             result.append(mAP)
             if iou_thresh in [0.5, 0.75]:
-                logger.info(f'Eva({data_name}) epoch {epoch}, IoU: {iou_thresh}, APs: {str(APs[:10])}, mAP: {mAP}')
+                logger.info(f'Eva({data_name}) epoch {epoch}, IoU: {iou_thresh}, APs: {str(APs)}, mAP: {mAP}')
                 if iou_thresh == 0.5:
                     AP50 = [_ for _ in APs]
                 if iou_thresh == 0.75:
@@ -133,6 +133,8 @@ class BaseModel(torch.nn.Module):
             metrics[data_name+"/"+"AP50"] = result[0]
             metrics[data_name+"/"+"AP75"] = result[5]
             metrics[data_name+"/"+"AP50-AP95"] = sum(result)/len(result)
+            metrics[data_name+"/"+"AP50_EachClass"] =  AP50
+            metrics[data_name+"/"+"AP75_EachClass"] =  AP75
 
         elif data_name == "test":
             metrics[data_name+"/"+"AP50"] = result[0]
