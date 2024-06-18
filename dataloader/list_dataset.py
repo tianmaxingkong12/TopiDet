@@ -6,6 +6,7 @@ from options.helper import is_first_gpu
 
 from dataloader.voc import VOCTrainValDataset
 from dataloader.coco import CocoDataset
+from dataloader.Lesion4K import Lesion4KDataset
 
 import torch.utils.data.dataset as dataset
 import cv2
@@ -126,7 +127,32 @@ def get_all_datasets():
                         dataset_item.test_split, transforms=val_transform)
                 test_datasets.append(test_dataset)
                 config.DATA.TEST_NUM = len(test_dataset)
+        
+        elif data_format == 'Lesion4K':
+            if hasattr(dataset_item, 'train_split'):
+                train_dataset = Lesion4KDataset(dataset_item.voc_root, 
+                        dataset_item.train_split, transforms=train_transform, 
+                        load_difficult=config.DATA.LOAD_DIFFICULT, 
+                        load_nontypicalbbox=config.DATA.TRAIN_LOAD_NONTYPICALBBOX, 
+                        load_effectivearea=config.DATA.LOAD_EFFECTIVEAREA)
+                train_datasets.append(train_dataset)
+                config.DATA.TRAIN_NUM = len(train_dataset)
 
+            if hasattr(dataset_item, 'val_split'):
+                val_dataset = Lesion4KDataset(dataset_item.voc_root, 
+                        dataset_item.val_split, transforms=val_transform,
+                        load_nontypicalbbox=config.DATA.VAL_LOAD_NONTYPICALBBOX, 
+                        load_effectivearea=config.DATA.LOAD_EFFECTIVEAREA)
+                val_datasets.append(val_dataset)
+                config.DATA.VALID_NUM = len(val_dataset)
+            
+            if hasattr(dataset_item, 'test_split'):
+                test_dataset = Lesion4KDataset(dataset_item.voc_root, 
+                        dataset_item.val_split, transforms=val_transform,
+                        load_nontypicalbbox=config.DATA.VAL_LOAD_NONTYPICALBBOX, 
+                        load_effectivearea=config.DATA.LOAD_EFFECTIVEAREA)
+                test_datasets.append(test_dataset)
+                config.DATA.TEST_NUM = len(test_dataset)
         
     config.DATA.CLASS_NAMES = class_names
     config.DATA.NUM_CLASSESS = len(class_names)
