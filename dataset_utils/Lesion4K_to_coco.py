@@ -86,7 +86,7 @@ if __name__ == '__main__':
                     'segmentation': [[]],
                     'area': area,
                     'bbox': [x1, y1, width, height],
-                    'iscrowed': 0,
+                    'iscrowd': 0,
                     'istypical': int(mark["isTypical"]),
                     # 'istruncation': int(mark["isTruncation"])
                 })
