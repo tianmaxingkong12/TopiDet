@@ -4,8 +4,8 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
 gt_path = "./preds/VOC2007Test/instances_test2007.json"
-pred_path = "./preds/VOC2007Test/pred_fasterrcnn_cocopretrained.json"
-save_root = "./preds/VOC2007Test/pred_fasterrcnn_cocopretrained/"
+pred_path = "./preds/VOC2007Test/pred_fasterrcnn_nms_05.json"
+save_root = "./preds/VOC2007Test/pred_fasterrcnn_nms_05/"
 if os.path.exists(save_root) == False:
     os.makedirs(save_root,exist_ok=True)
 
