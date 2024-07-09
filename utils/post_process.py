@@ -3,6 +3,10 @@ import argparse
 import numpy as np
 from pycocotools.coco import COCO
 from pycocotools._mask import iou
+from collections import defaultdict
+import torchvision.ops as ops
+import torch
+
 
 def parse_opt():
     parser = argparse.ArgumentParser()
@@ -11,6 +15,24 @@ def parse_opt():
     parser.add_argument("--voc", action="store_true", help="only evaluate classes")
     opt = parser.parse_args()
     return opt
+
+def nms(coco_result, nms_thresh):
+    dts_per_image = defaultdict(list)
+    image_ids = set()
+    for dt in coco_result:
+        dts_per_image[dt['image_id']].append(dt)
+        image_ids.add(dt['image_id'])
+    _out_boxes = [] 
+    for image_id in image_ids:
+        _dts = dts_per_image[image_id]
+        if len(_dts) > 0:
+            boxes = torch.Tensor([ _["bbox"] for _ in _dts])
+            scores = torch.Tensor([_["score"] for _ in _dts])
+            labels = torch.Tensor([_['category_id'] for _ in _dts])
+            boxes[:,2:4] += boxes[:,0:2]
+            keep_inds = ops.batched_nms(boxes,scores, labels, nms_thresh)
+            _out_boxes.extend([_dts[i] for i in keep_inds])
+    return _out_boxes
 
 def post_process_analyse(gt_path, pred_path, info):
     cocoGT = COCO(gt_path)
@@ -31,7 +53,7 @@ def post_process_analyse(gt_path, pred_path, info):
     info["f1-score"] = f1_score
     info["scores"] = scores
     ## AP
-    info["AP"] = ap_calculate(precision, recall, "coco")
+    info["AP"],info["recThrs"],info["Precision_101"] = ap_calculate(precision, recall, "coco")
     ## 最优置信度阈值 Precision Recall F1-score
     info["best_confidence_threshold"] = scores[np.argmax(f1_score)]
     info["best_precision"] = scores[np.argmax(f1_score)]
@@ -162,7 +184,7 @@ def coco_ap_calculate(precision,recall):
         pass
     precision = np.array(q)
     ap = np.mean(precision)
-    return ap
+    return ap, recThrs, precision
 
 def voc_ap_calculate(precision, recall, use_07_metric = True):
     ## precision (N,1)
