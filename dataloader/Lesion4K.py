@@ -9,6 +9,9 @@ import cv2
 
 from dataloader.data_helper import voc_to_yolo_format
 
+def convert_index_to_Leison_label(id):
+    m = [1,2,3,8,11,16,19,20,21,25,30,37,40,41,42,44]
+    return m[id]
 
 class Lesion4KDataset(Dataset):
     """Coco dataset."""

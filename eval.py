@@ -5,6 +5,8 @@ import pandas as pd
 torch.multiprocessing.set_sharing_strategy('file_system')  # ulimit -SHn 51200
 
 from dataloader.dataloaders import test_dataloader, train_dataset, test_dataset
+from dataloader.Lesion4K import convert_index_to_Leison_label
+from dataloader.coco import coco_80_to_90_classes
 from options import opt, config
 from mscv.summary import write_loss, write_image
 from mscv.image import tensor2im
@@ -35,9 +37,6 @@ if __name__ == '__main__':
         raise_exception('eval.py: the following arguments are required: --load')
     if config.DATA.DATASET == ["voc_coco"]:
         config.DATA.NUM_CLASSESS = 90 ##对于COCO
-    convert_COCO_label = False
-    if config.DATA.NUM_CLASSESS == 80:
-        convert_COCO_label = True
     Model = get_model(config.MODEL.NAME)
     model = Model(config)
     model = model.to(device=opt.device)
@@ -87,7 +86,17 @@ if __name__ == '__main__':
     # 测试集为test时输出详细信息
     metrics = evaluate(model, test_dataloader, which_epoch, writer, logger, 'test')
     print(metrics)
-    coco_result = model.save_preds(test_dataloader, convert_COCO_label)
+    print(test_dataloader.__dict__)
+    ## TODO save_preds 引入class map
+    if config.DATA.DATASET == ["Lesion4K"]:
+        class_map = convert_index_to_Leison_label
+    elif config.DATA.DATASET == ["coco"] and config.DATA.NUM_CLASSESS == 80:
+        class_map = coco_80_to_90_classes
+    elif config.DATA.DATASET == ["voc"]:
+        class_map = lambda x:x+1
+    else:
+        class_map = lambda x:x+1
+    coco_result = model.save_preds(test_dataloader, class_map)
     with open(os.path.join(log_root, "pred.json"), "w") as f:
         json.dump(coco_result, f)
     # data = pd.DataFrame(columns = ["编号","类别名称","训练集图片数","训练集框数","测试集图片数","测试集框数","测试集AP50","测试集AP75"])

@@ -12,11 +12,13 @@ from misc_utils import color_print, progress_bar, save_json
 from options import opt
 import misc_utils as utils
 import numpy as np
-from mscv import load_checkpoint, save_checkpoint
+from mscv import load_checkpoint, save_checkpoint, load_state_dict
 from mscv.image import tensor2im
 from mscv.summary import write_loss, write_image
 from utils.vis import visualize_boxes
 from dataloader.coco import coco_80_to_90_classes
+from dataloader.Lesion4K import convert_index_to_Leison_label
+from utils.utils import intersect_dicts
 
 class BaseModel(torch.nn.Module):
     def __init__(self, config, kwargs):
@@ -149,7 +151,15 @@ class BaseModel(torch.nn.Module):
         if ckpt_path[-2:] != 'pt' and ckpt_path[-3:] != "pth":
             return 0
         if ckpt_path[-3:] == "pth":
-            self.detector.load_state_dict(torch.load(ckpt_path))
+            """加载pytorch官方提供的预训练模型"""
+            state_dict = torch.load(ckpt_path, map_location=opt.device)
+            if hasattr(self.detector, 'module'):
+                module = self.detector.module
+            else:
+                module = self.detector
+            csd = intersect_dicts(state_dict, module.state_dict(), exclude={})  # intersect
+            load_state_dict(module, csd)
+            print(f"Transferred {len(csd)}/{len(module.state_dict())} items from {ckpt_path}")  # report
             return 0
         
         load_dict = {
@@ -176,12 +186,11 @@ class BaseModel(torch.nn.Module):
 
         return epoch
 
-    def save_preds(self, dataloader, convert_COCO_label = False):
+    def save_preds(self, dataloader, class_map = lambda x:x+1):
         # save inference preds in COCO format 
         # pred_bboxes 图的数量 * bbox的数量 * x1y1x2y2
         # pred_labels 图的数量 * bbox的数量 
         # pred_scores 图的数量 * bbox的数量
-        label_convert = coco_80_to_90_classes if convert_COCO_label else lambda x:x+1
         pred_bboxes, pred_labels, pred_scores, gt_bboxes, gt_labels, gt_difficults, image_ids = self.validation(dataloader)
         jdict = []
         for i in range(len(pred_bboxes)):
@@ -192,7 +201,7 @@ class BaseModel(torch.nn.Module):
                 height = max(0, y2 - y1)
                 _pred_bbox = {
                     "image_id": int(image_ids[i]), 
-                    "category_id": label_convert(int(pred_labels[i][j])), 
+                    "category_id": class_map(int(pred_labels[i][j])), 
                     "bbox": [x1, y1, width, height], 
                     "score": float(pred_scores[i][j]),
                 }
