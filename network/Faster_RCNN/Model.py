@@ -24,7 +24,7 @@ import misc_utils as utils
 import ipdb
 
 from .frcnn.faster_rcnn import FasterRCNN, FastRCNNPredictor
-from .frcnn import fasterrcnn_resnet50_fpn
+from .frcnn import fasterrcnn_resnet50_fpn, fasterrcnn_resnet101_fpn
 from .frcnn.rpn import concat_box_prediction_layers
 from .frcnn.roi_heads import fastrcnn_loss
 
@@ -72,9 +72,11 @@ class Model(BaseModel):
             self.detector = FasterRCNN(backbone, num_classes=config.DATA.NUM_CLASSESS + 1, **kargs)
 
         elif config.MODEL.BACKBONE.lower() in ['res101', 'resnet101']:
+            # 带FPN的resnet101
+            self.detector = fasterrcnn_resnet101_fpn(pretrained=False, pretrained_backbone=config.MODEL.BACKBONE_PRETRAINED, **kargs)
             # 不带FPN的resnet101
-            backbone = res101_backbone(config.MODEL.BACKBONE_PRETRAINED)
-            self.detector = FasterRCNN(backbone, num_classes=config.DATA.NUM_CLASSESS + 1, **kargs)
+            # backbone = res101_backbone(config.MODEL.BACKBONE_PRETRAINED)
+            # self.detector = FasterRCNN(backbone, num_classes=config.DATA.NUM_CLASSESS + 1, **kargs)
 
         elif config.MODEL.BACKBONE.lower() in ['res', 'resnet']:
             raise RuntimeError(f'backbone "{config.MODEL.BACKBONE}" is ambiguous, please specify layers.')
