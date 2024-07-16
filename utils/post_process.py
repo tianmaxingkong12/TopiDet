@@ -56,7 +56,7 @@ def post_process_analyse(gt_path, pred_path, info):
     info["AP"],info["recThrs"],info["Precision_101"] = ap_calculate(precision, recall, "coco")
     ## 最优置信度阈值 Precision Recall F1-score
     info["best_confidence_threshold"] = scores[np.argmax(f1_score)]
-    info["best_precision"] = scores[np.argmax(f1_score)]
+    info["best_precision"] = precision[np.argmax(f1_score)]
     info["best_recall"] = recall[np.argmax(f1_score)]
     info["best_f1-score"] = f1_score[np.argmax(f1_score)]
     
