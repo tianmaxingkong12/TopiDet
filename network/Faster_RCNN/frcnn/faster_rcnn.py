@@ -1,14 +1,17 @@
+from typing import Any, Callable, List, Optional, Tuple, Union
 from collections import OrderedDict
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 
+
 from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops import MultiScaleRoIAlign
 
 from torchvision.models.utils import load_state_dict_from_url
 
+from .misc_nn_ops import Conv2dNormActivation
 from .generalized_rcnn import GeneralizedRCNN
 from .rpn import AnchorGenerator, RPNHead, RegionProposalNetwork
 from .roi_heads import RoIHeads
@@ -17,9 +20,13 @@ from .backbone_utils import resnet_fpn_backbone
 
 
 __all__ = [
-    "FasterRCNN", "fasterrcnn_resnet50_fpn","fasterrcnn_resnet101_fpn"
+    "FasterRCNN", "fasterrcnn_resnet50_fpn","fasterrcnn_resnet101_fpn","fasterrcnn_resnet50_fpn_v2"
 ]
 
+def _default_anchorgen():
+    anchor_sizes = ((32,), (64,), (128,), (256,), (512,))
+    aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
+    return AnchorGenerator(anchor_sizes, aspect_ratios)
 
 class FasterRCNN(GeneralizedRCNN):
     """
@@ -256,6 +263,41 @@ class TwoMLPHead(nn.Module):
 
         return x
 
+class FastRCNNConvFCHead(nn.Sequential):
+    def __init__(
+        self,
+        input_size: Tuple[int, int, int],
+        conv_layers: List[int],
+        fc_layers: List[int],
+        norm_layer: Optional[Callable[..., nn.Module]] = None,
+    ):
+        """
+        Args:
+            input_size (Tuple[int, int, int]): the input size in CHW format.
+            conv_layers (list): feature dimensions of each Convolution layer
+            fc_layers (list): feature dimensions of each FCN layer
+            norm_layer (callable, optional): Module specifying the normalization layer to use. Default: None
+        """
+        in_channels, in_height, in_width = input_size
+
+        blocks = []
+        previous_channels = in_channels
+        for current_channels in conv_layers:
+            blocks.append(Conv2dNormActivation(previous_channels, current_channels, norm_layer=norm_layer))
+            previous_channels = current_channels
+        blocks.append(nn.Flatten())
+        previous_channels = previous_channels * in_height * in_width
+        for current_channels in fc_layers:
+            blocks.append(nn.Linear(previous_channels, current_channels))
+            blocks.append(nn.ReLU(inplace=True))
+            previous_channels = current_channels
+
+        super().__init__(*blocks)
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight, mode="fan_out", nonlinearity="relu")
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
 
 class FastRCNNPredictor(nn.Module):
     """
@@ -341,6 +383,37 @@ def fasterrcnn_resnet50_fpn(pretrained=False, progress=True,
                                               progress=progress)
         model.load_state_dict(state_dict)
     return model
+
+def fasterrcnn_resnet50_fpn_v2(pretrained=False, progress=True,
+                            num_classes=91, pretrained_backbone=True,
+                            **kwargs):
+    if pretrained:
+        # no need to download the backbone if pretrained is set
+        # 如果Faster-RCNN整个网络加载权重就不需要backnone的权重
+        pretrained_backbone = False
+
+    backbone = resnet_fpn_backbone('resnet50', pretrained_backbone, norm_layer=nn.BatchNorm2d)
+
+    rpn_anchor_generator = _default_anchorgen()
+    rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], 
+                       conv_depth=2)
+    box_head = FastRCNNConvFCHead(
+        (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=nn.BatchNorm2d
+    )
+    model = FasterRCNN(
+        backbone, 
+        num_classes=num_classes,
+        rpn_anchor_generator=rpn_anchor_generator,
+        rpn_head=rpn_head,
+        box_head = box_head,
+        **kwargs,
+    )
+    if pretrained:
+        state_dict = load_state_dict_from_url(model_urls['fasterrcnn_resnet50_fpn_v2_coco'],
+                                              progress=progress)
+        model.load_state_dict(state_dict)
+    return model
+
 
 def fasterrcnn_resnet101_fpn(pretrained=False, progress=True,
                             num_classes=91, pretrained_backbone=True, norm_layer=misc_nn_ops.FrozenBatchNorm2d,

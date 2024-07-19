@@ -1,11 +1,16 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import collections
+from itertools import repeat
+from typing import Dict, List, Optional, Tuple, Union, Callable, Sequence, Any
 import torch
+from torch import nn, Tensor
 from torch.nn import functional as F
 from torch import nn
 
 from torchvision.ops import boxes as box_ops
 
 from . import _utils as det_utils
+from .misc_nn_ops import Conv2dNormActivation
 
 
 class AnchorGenerator(nn.Module):
@@ -130,30 +135,63 @@ class RPNHead(nn.Module):
     """
     Adds a simple RPN Head with classification and regression heads
 
-    Arguments:
+    Args:
         in_channels (int): number of channels of the input feature
         num_anchors (int): number of anchors to be predicted
+        conv_depth (int, optional): number of convolutions
     """
 
-    def __init__(self, in_channels, num_anchors):
-        super(RPNHead, self).__init__()
-        self.conv = nn.Conv2d(
-            in_channels, in_channels, kernel_size=3, stride=1, padding=1
-        )
+    _version = 2
+
+    def __init__(self, in_channels: int, num_anchors: int, conv_depth=1) -> None:
+        super().__init__()
+        convs = []
+        for _ in range(conv_depth):
+            convs.append(Conv2dNormActivation(in_channels, in_channels, kernel_size=3, norm_layer=None))
+        self.conv = nn.Sequential(*convs)
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(
-            in_channels, num_anchors * 4, kernel_size=1, stride=1
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=1, stride=1)
+
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                torch.nn.init.normal_(layer.weight, std=0.01)  # type: ignore[arg-type]
+                if layer.bias is not None:
+                    torch.nn.init.constant_(layer.bias, 0)  # type: ignore[arg-type]
+
+    def _load_from_state_dict(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        version = local_metadata.get("version", None)
+
+        if version is None or version < 2:
+            for type in ["weight", "bias"]:
+                old_key = f"{prefix}conv.{type}"
+                new_key = f"{prefix}conv.0.0.{type}"
+                if old_key in state_dict:
+                    state_dict[new_key] = state_dict.pop(old_key)
+
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
-        for l in self.children():
-            torch.nn.init.normal_(l.weight, std=0.01)
-            torch.nn.init.constant_(l.bias, 0)
-
-    def forward(self, x):
+    def forward(self, x: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
         logits = []
         bbox_reg = []
         for feature in x:
-            t = F.relu(self.conv(feature))
+            t = self.conv(feature)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg

@@ -24,7 +24,7 @@ import misc_utils as utils
 import ipdb
 
 from .frcnn.faster_rcnn import FasterRCNN, FastRCNNPredictor
-from .frcnn import fasterrcnn_resnet50_fpn, fasterrcnn_resnet101_fpn
+from .frcnn import fasterrcnn_resnet50_fpn, fasterrcnn_resnet101_fpn, fasterrcnn_resnet50_fpn_v2
 from .frcnn.rpn import concat_box_prediction_layers
 from .frcnn.roi_heads import fastrcnn_loss
 
@@ -53,12 +53,11 @@ class Model(BaseModel):
         
         kargs.update({'box_nms_thresh': config.TEST.NMS_THRESH})
 
-        # 多卡使用 SyncBN
-        if is_distributed():
-            kargs.update({'norm_layer': torch.nn.SyncBatchNorm})
-
         # 定义backbone和Faster RCNN模型
         if config.MODEL.BACKBONE is None or config.MODEL.BACKBONE.lower() in ['res50', 'resnet50']:
+            # 多卡使用 SyncBN
+            if is_distributed():
+                kargs.update({'norm_layer': torch.nn.SyncBatchNorm})
             # 默认是带fpn的resnet50
             self.detector = fasterrcnn_resnet50_fpn(pretrained=False, pretrained_backbone=config.MODEL.BACKBONE_PRETRAINED, **kargs)
 
@@ -66,6 +65,12 @@ class Model(BaseModel):
 
             # replace the pre-trained head with a new one
             self.detector.roi_heads.box_predictor = FastRCNNPredictor(in_features, config.DATA.NUM_CLASSESS + 1)
+
+        ## fasterrcnn_resnet50_fpn_v2
+        elif config.MODEL.BACKBONE.lower() in ['res50_fpn_v2', 'resnet50_fpn_v2']:
+            self.detector = fasterrcnn_resnet50_fpn_v2(pretrained=False, pretrained_backbone=config.MODEL.BACKBONE_PRETRAINED, **kargs)
+            if is_distributed():
+                self.detector = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.detector)
 
         elif config.MODEL.BACKBONE.lower() in ['vgg16', 'vgg']:
             backbone = vgg16_backbone(config.MODEL.BACKBONE_PRETRAINED)
