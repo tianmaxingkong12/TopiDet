@@ -1,0 +1,34 @@
+MODEL:
+  NAME: Cascade_RCNN
+  BACKBONE: resnet50
+  # LOAD: ./pretrained/0_voc_FasterRCNN.pt
+DATA:
+  DATASET: Lesion4K
+  TRANSFORM: frcnn
+  SCALE: [800, 1333]
+  LOAD_DIFFICULT: false
+  TRAIN_LOAD_NONTYPICALBBOX: true
+  VAL_LOAD_NONTYPICALBBOX: true
+  LOAD_EFFECTIVEAREA: false
+OPTIMIZE:
+  OPTIMIZER: sgd
+  BASE_LR: 0.016 # 0.001 * 2(bs) * 8 gpus
+  SCHEDULER: 1x
+  BATCH_SIZE: 2
+  USE_EPOCH: true
+  EPOCHS: 12
+TEST:
+  NMS_THRESH : 0.5  # nms iou thresh at test time
+  CONF_THRESH: 0.05 # confidence thresh to keep at test time
+MISC:
+  VAL_FREQ: 1
+  SAVE_FREQ: 10
+  NUM_WORKERS: 2
+WANDB:
+  PROJECT_NAME: Lesion4K-Faster-RCNN-debug
+  GROUP_NAME: baseline
+  JOB_TYPE: train
+  EXP_NAME: 
+  EXP_ID:
+LOG:
+  ROOT_DIR:
