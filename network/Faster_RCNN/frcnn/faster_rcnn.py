@@ -1,10 +1,11 @@
 from typing import Any, Callable, List, Optional, Tuple, Union
 from collections import OrderedDict
+from functools import partial
 
 import torch
 from torch import nn
 import torch.nn.functional as F
-
+from mscv import load_checkpoint, save_checkpoint, load_state_dict
 
 from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops import MultiScaleRoIAlign
@@ -17,10 +18,13 @@ from .rpn import AnchorGenerator, RPNHead, RegionProposalNetwork
 from .roi_heads import RoIHeads
 from .transform import GeneralizedRCNNTransform
 from .backbone_utils import resnet_fpn_backbone
+from detectron2.modeling import ViT, SimpleFeaturePyramid
+from detectron2.modeling.backbone.fpn import LastLevelMaxPool
 
 
 __all__ = [
-    "FasterRCNN", "fasterrcnn_resnet50_fpn","fasterrcnn_resnet101_fpn","fasterrcnn_resnet50_fpn_v2"
+    "FasterRCNN", "fasterrcnn_resnet50_fpn","fasterrcnn_resnet101_fpn","fasterrcnn_resnet50_fpn_v2","fasterrcnn_vitbasep16_fpn",
+    "fasterrcnn_vitlargep16_fpn"
 ]
 
 def _default_anchorgen():
@@ -467,4 +471,117 @@ def fasterrcnn_resnet101_fpn(pretrained=False, progress=True,
     #     state_dict = load_state_dict_from_url(model_urls['fasterrcnn_resnet50_fpn_coco'],
     #                                           progress=progress)
     #     model.load_state_dict(state_dict)
+    return model
+
+def fasterrcnn_vitbasep16_fpn(pretrained=False, use_official_ckpt=True,
+                            num_classes=91, pretrained_backbone=True,
+                            **kwargs):
+    if pretrained:
+        # no need to download the backbone if pretrained is set
+        # 如果Faster-RCNN整个网络加载权重就不需要backnone的权重
+        pretrained_backbone = False
+    embed_dim, depth, num_heads, dp = 768, 12, 12, 0.1
+    vit = ViT(img_size=1024,
+        patch_size=16,
+        embed_dim=embed_dim,
+        depth=depth,
+        num_heads=num_heads,
+        drop_path_rate=dp,
+        window_size=14,
+        mlp_ratio=4,
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        window_block_indexes=[
+            # 2, 5, 8 11 for global attention
+            0,
+            1,
+            3,
+            4,
+            6,
+            7,
+            9,
+            10,
+        ],
+        residual_block_indexes=[],
+        use_rel_pos=True,
+        out_feature="last_feat",)
+    if pretrained_backbone and use_official_ckpt:
+        print('Loading MAE Pretrained ViT Base weights...')
+        ckpt = torch.hub.load_state_dict_from_url('https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth',map_location='cpu')
+        vit.load_state_dict(ckpt['model'],strict=False)
+
+    backbone = SimpleFeaturePyramid(
+        vit,
+        in_feature="last_feat",
+        out_channels=256,
+        scale_factors=(4.0, 2.0, 1.0, 0.5),
+        top_block=LastLevelMaxPool(),
+        norm="LN",
+        square_pad=1024,
+    )
+    backbone.out_channels = 256
+    roi_pooler = MultiScaleRoIAlign(
+        featmap_names=backbone._out_features,
+        output_size=7,
+        sampling_ratio=2
+    )
+    model = FasterRCNN(
+        backbone, 
+        num_classes=num_classes,
+        box_roi_pool=roi_pooler,
+    )
+    return model
+
+def fasterrcnn_vitlargep16_fpn(pretrained=False, use_official_ckpt=True,
+                            num_classes=91, pretrained_backbone=True,
+                            **kwargs):
+    if pretrained:
+        # no need to download the backbone if pretrained is set
+        # 如果Faster-RCNN整个网络加载权重就不需要backnone的权重
+        pretrained_backbone = False
+    embed_dim, depth, num_heads, dp = 1024, 24, 16, 0.4
+    vit = ViT(img_size=1024,
+        patch_size=16,
+        embed_dim=embed_dim,
+        depth=depth,
+        num_heads=num_heads,
+        drop_path_rate=dp,
+        window_size=14,
+        mlp_ratio=4,
+        qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        # 5, 11, 17, 23 for global attention
+        window_block_indexes=list(range(0, 5)) + list(range(6, 11)) + list(range(12, 17)) + list(range(18, 23)),
+        residual_block_indexes=[],
+        use_rel_pos=True,
+        out_feature="last_feat",)
+    
+    if pretrained_backbone:
+        if use_official_ckpt:
+            print('Loading Official MAE Pretrained ViT Large weights...')
+            ckpt = torch.hub.load_state_dict_from_url('https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_large.pth',map_location='cpu')
+        else:
+            print('Loading RETFound MAE Pretrained ViT Large weights...',map_location='cpu')
+            ckpt = torch.load("/data/hanliming/checkpoints/RETFound_ckpt/RETFound_oct_weights.pth")
+        vit.load_state_dict(ckpt["model"], strict=False)
+    backbone = SimpleFeaturePyramid(
+        vit,
+        in_feature="last_feat",
+        out_channels=256,
+        scale_factors=(4.0, 2.0, 1.0, 0.5),
+        top_block=LastLevelMaxPool(),
+        norm="LN",
+        square_pad=1024,
+    )
+    backbone.out_channels = 256
+    roi_pooler = MultiScaleRoIAlign(
+        featmap_names=backbone._out_features,
+        output_size=7,
+        sampling_ratio=2
+    )
+    model = FasterRCNN(
+        backbone, 
+        num_classes=num_classes,
+        box_roi_pool=roi_pooler,
+    )
     return model
