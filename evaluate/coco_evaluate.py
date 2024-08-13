@@ -117,18 +117,16 @@ def coco_evaluate(gt_path, pred_path, classes=None):
     evaluate = Eval(cocoGT, cocoPred, "bbox")
     image_ids = cocoGT.getImgIds()
     anno_ids  = cocoGT.getAnnIds()
-    print(len(image_ids), len(anno_ids))
     print(classes)
-    # evaluate.params.catIds = cocoGT.getCatIds(catNms=classes)
-    print(evaluate.params.catIds)
+    evaluate.params.catIds = cocoGT.getCatIds(catNms=classes)
     evaluate.evaluate()
     evaluate.accumulate()
     stats, print_info = evaluate.summarize()
     print(print_info)
     
     cat_ids = cocoGT.getCatIds()
-    # if classes:
-    #     cat_ids = cocoGT.getCatIds(catNms=classes)
+    if classes:
+        cat_ids = cocoGT.getCatIds(catNms=classes)
     result = pd.DataFrame(columns=["编号","类别名称","AP50:95","AP50","AP75","APs","APm","APl"])
     result.loc[0,"类别名称"] = "all"
     result.loc[0,"AP50:95"] = stats[0]
