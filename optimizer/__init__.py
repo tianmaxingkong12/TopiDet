@@ -10,6 +10,8 @@ def get_optimizer(config, module):
 
     if optimizer == 'adam':
         optimizer = optim.Adam(module.parameters(), lr=lr, betas=(0.95, 0.999))
+    elif optimizer == 'adamw':
+        optimizer = optim.AdamW(module.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=0.1)
     elif optimizer == 'sgd':  # 从头训练 lr=0.1 fine_tune lr=0.01
         # optimizer = optim.SGD(module.parameters(), lr=lr, momentum=0.9, weight_decay=0.0005*24)  # Yolo
         optimizer = optim.SGD(module.parameters(), lr=lr, momentum=0.9, weight_decay=0.0001)  # FRCNN
