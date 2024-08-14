@@ -4,8 +4,8 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
 gt_path = "./preds/VOC2007Test/instances_test2007.json"
-pred_path = "./preds/VOC2007Test/pred_fasterrcnn_nms_05.json"
-save_root = "./preds/VOC2007Test/pred_fasterrcnn_nms_05/"
+pred_path = "./preds/VOC2007Test/pred_fasterrcnn_cocopretrained1.json"
+save_root = "./preds/VOC2007Test/pred_fasterrcnn_cocopretrained1/"
 if os.path.exists(save_root) == False:
     os.makedirs(save_root,exist_ok=True)
 
@@ -56,10 +56,14 @@ def convert_single_class_anno(annos, cls_name):
     dataList = []
     for _ in annos:
         _convert_annos = {}
-        _convert_annos["startX"] = int(_["bbox"][0])
-        _convert_annos["startY"] = int(_["bbox"][1])
-        _convert_annos["endX"] = int(_["bbox"][0] + _["bbox"][2])
-        _convert_annos["endY"] = int(_["bbox"][1] + _["bbox"][3])
+        # _convert_annos["startX"] = int(_["bbox"][0])
+        # _convert_annos["startY"] = int(_["bbox"][1])
+        # _convert_annos["endX"] = int(_["bbox"][0] + _["bbox"][2])
+        # _convert_annos["endY"] = int(_["bbox"][1] + _["bbox"][3])
+        _convert_annos["startX"] = _["bbox"][0]
+        _convert_annos["startY"] = _["bbox"][1]
+        _convert_annos["endX"] = _["bbox"][0] + _["bbox"][2]
+        _convert_annos["endY"] = _["bbox"][1] + _["bbox"][3]
         _convert_annos["confidence"] = _["score"]
         dataList.append(_convert_annos)
     anno["dataList"] = dataList

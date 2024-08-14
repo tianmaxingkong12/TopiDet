@@ -9,8 +9,49 @@ import numpy as np
 from torchvision import transforms
 from torchvision.ops import boxes as box_ops
 
+def coco80_to_voc20_class():
+    m = [-1]*80
+    m[4] = 1
+    m[1] = 2
+    m[14] = 3
+    m[8] = 4
+    m[39] = 5
+    m[5] = 6
+    m[2] = 7
+    m[15] = 8
+    m[56] = 9
+    m[19] = 10
+    m[60] = 11
+    m[16] = 12
+    m[17] = 13
+    m[3] = 14
+    m[0] = 15 #person
+    m[58] = 16
+    m[18] = 17
+    m[57] = 18
+    m[6] = 19
+    m[62] = 20
+    return m
+def coco90_to_coco80_class():
+    m = [0,1,2,3,4,5,6,7,8,9,10,11,0,12,13,14,15,16,17,18,19,20,21,22,23,24,0,
+            25,26,0,0,27,28,29,30,31,32,33,34,35,36,37,38,39,40, 0,41,42,43,44,45,46,
+            47,48,49,50,51,52,53,54,55,56,57,58,59,60, 0,61,0,0,62,0,63,64,65,66,67,68,69,
+            70,71,72,73,0,74,75,76,77,78,79,80]
+    return m
+def coco90_to_voc20_class():
+    m = []
+    coco90_to_80 = coco90_to_coco80_class()
+    coco80_to_voc20 = coco80_to_voc20_class()
+    for _ in range(91): #1~90
+        if coco90_to_80[_] == 0:
+            m.append(-1)
+        else:
+            m.append(coco80_to_voc20[coco90_to_80[_]-1])
+    return m
+    
+
 device = "cuda:2"
-ckpt_path = "./ckpt/FasterRCNN-HLM-VOC.pt"
+ckpt_path = "./ckpt/FasterRCNN-Official-COCO.pt"
 anno_json = "./preds/VOC2007Test/instances_test2007.json"
 image_root_dir = "datasets/VOC07_12/test2007"
 
@@ -55,11 +96,11 @@ def post_process(detection, nms_thresh=0.5, conf_thresh=0.05, max_dets=300):
     keep = box_ops.remove_small_boxes(boxes, min_size=1e-2)
     boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
 
-    # non-maximum suppression, independently done per class
-    keep = box_ops.batched_nms(boxes, scores, labels, nms_thresh)
-    # keep only topk scoring predictions
-    keep = keep[:max_dets]
-    boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
+    # # non-maximum suppression, independently done per class
+    # keep = box_ops.batched_nms(boxes, scores, labels, nms_thresh)
+    # # keep only topk scoring predictions
+    # keep = keep[:max_dets]
+    # boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
     return boxes, scores, labels
 
 
@@ -69,7 +110,7 @@ def convert_onnx(model):
     dummy_input = torch.randn(1, 3, 800, 1333).to("cpu")
     model(dummy_input) 
     im = torch.zeros(1, 3, 800, 1333).to("cpu") 
-    torch.onnx.export(model, im, "./ckpt/FasterRCNN-HLM-VOC.onnx",
+    torch.onnx.export(model, im, "./ckpt/FasterRCNN-Official-COCO.onnx",
                       verbose=False,
                       opset_version=13,               
                       do_constant_folding=True, 
@@ -79,6 +120,7 @@ def convert_onnx(model):
 
 
 if __name__ == "__main__":
+    class_map = coco90_to_voc20_class()
     with open(anno_json, "r") as f:
         anno = json.load(f)
     images = anno["images"]
@@ -92,20 +134,21 @@ if __name__ == "__main__":
         image_path = os.path.join(image_root_dir, image_name)
         bboxes, labels, scores = inference(image_path, model, conf_thresh=0.05, nms_thresh=0.5)
         for bbox, label, score in zip(bboxes, labels, scores):
-            bbox = [
-                float(bbox[0]),
-                float(bbox[1]),
-                float(bbox[2] - bbox[0]),
-                float(bbox[3] - bbox[1]),
-            ]
-            preds.append(
-                {
-                    "image_id": image_id,
-                    "category_id": int(label),
-                    "bbox": bbox,
-                    "score": float(score),
-                }
-            )
+            if class_map[int(label)] != -1:
+                bbox = [
+                    float(bbox[0]),
+                    float(bbox[1]),
+                    float(bbox[2]-bbox[0]),
+                    float(bbox[3]-bbox[1]),
+                ]
+                preds.append(
+                    {
+                        "image_id": image_id,
+                        "category_id": class_map[int(label)],
+                        "bbox": bbox,
+                        "score": float(score),
+                    }
+                )
     pred_json = os.path.join(".", "pred.json")
     with open(pred_json, "w") as f:
         json.dump(preds, f)

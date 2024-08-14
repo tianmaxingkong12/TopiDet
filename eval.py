@@ -37,6 +37,10 @@ if __name__ == '__main__':
         raise_exception('eval.py: the following arguments are required: --load')
     if config.DATA.DATASET == ["voc_coco"]:
         config.DATA.NUM_CLASSESS = 90 ##对于COCO
+        # config.DATA.NUM_CLASSESS = 80 ##对于自行训练的COCO
+    if config.DATA.DATASET == ["coco"]:
+        config.DATA.NUM_CLASSESS = 90
+    print(config.DATA.NUM_CLASSESS)
     Model = get_model(config.MODEL.NAME)
     model = Model(config)
     model = model.to(device=opt.device)
@@ -84,13 +88,14 @@ if __name__ == '__main__':
         logger.info('test_trasforms: ' +str(test_dataloader.dataset.transforms))
     logger.info('===========================================')
     # 测试集为test时输出详细信息
-    metrics = evaluate(model, test_dataloader, which_epoch, writer, logger, 'test')
-    print(metrics)
-    print(test_dataloader.__dict__)
+    # metrics = evaluate(model, test_dataloader, which_epoch, writer, logger, 'test')
+    # print(metrics)
     ## TODO save_preds 引入class map
     if config.DATA.DATASET == ["Lesion4K"]:
         class_map = convert_index_to_Leison_label
     elif config.DATA.DATASET == ["coco"] and config.DATA.NUM_CLASSESS == 80:
+        class_map = coco_80_to_90_classes
+    elif config.DATA.DATASET == ["voc_coco"] and config.DATA.NUM_CLASSESS == 80:
         class_map = coco_80_to_90_classes
     elif config.DATA.DATASET == ["voc"]:
         class_map = lambda x:x+1
@@ -99,6 +104,7 @@ if __name__ == '__main__':
     coco_result = model.save_preds(test_dataloader, class_map)
     with open(os.path.join(log_root, "pred.json"), "w") as f:
         json.dump(coco_result, f)
+    print("prediction in coco format has been save as {}".format(os.path.join(log_root, "pred.json")))
     # data = pd.DataFrame(columns = ["编号","类别名称","训练集图片数","训练集框数","测试集图片数","测试集框数","测试集AP50","测试集AP75"])
     # for _id, class_name in enumerate(config.DATA.CLASS_NAMES):
     #     data.loc[_id,"编号"] = _id
